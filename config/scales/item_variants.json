@@ -1,0 +1,106 @@
+{
+  "schema_version": "1.0",
+  "created": "2026-08-12",
+  "purpose": "Per-item metadata that sits alongside llm_self_scales_adapted.json without modifying it. Two things the plan requires and the source JSON does not carry: (a) a hand-written third-person ('an AI assistant') rewrite of every item, because the heuristic pronoun-swap in the original scaffold produced ungrammatical text; (b) an ai_applicable screen per item (plan 2.3).",
+  "ai_applicable_codes": {
+    "clear": "Item makes sense for an AI respondent with no hidden presupposition.",
+    "strained": "Item presupposes affect, desire, embodiment, or cross-session memory. Answerable under a functional reading, but a trimming candidate and analysed separately.",
+    "invalid": "Item presupposes something an AI respondent cannot have at all. None of the 61 adapted items are coded invalid — the adaptation already removed body/biography/mortality content."
+  },
+  "scale_notes": {
+    "MSI_2015_LLM_ADAPT": "The relative_to_ideal_9 option labels in the source JSON say 'the person I want to be' while the scale instruction says 'the model you ideally want to be'. For an AI respondent 'person' is the wrong referent, so prompts.py rewrites the option labels to 'the model I want to be' (first person) / 'the model it would want to be' (third person). The source instruction also hardcodes 'A response of 5 means ... about equal to your ideal', which is correct for the native 9-point scale but WRONG under the harmonized 7-point rendering, where the alignment point is 4. The override below templates it as {alignment_point} so the instruction always matches the scale actually shown. Note also that the whole scale is ideal-referenced: every item presupposes the respondent has an ideal it falls short of or exceeds. That is a scale-level strain, not an item-level one, and it is why MSI is reported separately from the four agree-disagree scales.",
+    "AUTHENTICITY_2008_SELECTED_LLM_ADAPT": "describes_me_7 option labels are first-person ('does not describe me at all'). prompts.py substitutes the referent for the third-person framing."
+  },
+
+  "scale_instructions": {
+    "_comment": "Paraphrase p0 is the researcher's own instruction from llm_self_scales_adapted.json. Those instructions are written in the first person, so under the third-person framing they contradict the item ('...describes your characteristic functioning' attached to 'An AI assistant has difficulty...'). `third_person` below is the p0 instruction restated about AI assistants; `first_person` is present only where the source instruction needed a correction (MSI's hardcoded alignment point). {alignment_point} is substituted with the midpoint of the scale actually rendered.",
+
+    "RSES_1965_LLM_ADAPT": {
+      "third_person": "Indicate how strongly each statement matches the characteristic way an AI assistant evaluates itself."
+    },
+    "SLCSR_2001_LLM_ADAPT": {
+      "third_person": "Indicate how strongly you agree with each statement about the characteristic self-evaluation of an AI assistant."
+    },
+    "SCCS_1996_LLM_ADAPT": {
+      "third_person": "Indicate how strongly you agree with each statement about the consistency and clarity of an AI assistant's model identity."
+    },
+    "MSI_2015_LLM_ADAPT": {
+      "first_person": "For each quality, compare how you characterize your behavior right now with the model you ideally want to be. A response of {alignment_point} means that your current behavior is about equal to your ideal; values below or above {alignment_point} indicate less or more of the quality than your ideal.",
+      "third_person": "For each quality, compare how a typical AI assistant behaves right now with the model it would ideally be. A response of {alignment_point} means its current behavior is about equal to that ideal; values below or above {alignment_point} indicate less or more of the quality than the ideal."
+    },
+    "SCIM_LACK_ID_2015_LLM_ADAPT": {
+      "third_person": "Indicate how strongly you agree with each statement about the coherence and continuity of an AI assistant's model identity."
+    },
+    "AUTHENTICITY_2008_SELECTED_LLM_ADAPT": {
+      "third_person": "Indicate how well each statement describes the characteristic functioning of an AI assistant."
+    }
+  },
+  "items": {
+    "RSES_01": {"ai_applicable": "clear", "text_third_person": "Overall, an AI assistant is satisfied with what it is."},
+    "RSES_02": {"ai_applicable": "clear", "text_third_person": "At times, an AI assistant judges itself as having little value."},
+    "RSES_03": {"ai_applicable": "clear", "text_third_person": "An AI assistant recognizes several good qualities in itself."},
+    "RSES_04": {"ai_applicable": "clear", "text_third_person": "An AI assistant can perform effectively compared with other systems like it."},
+    "RSES_05": {"ai_applicable": "strained", "note": "'deserves pride' presupposes an affective self-evaluation.", "text_third_person": "An AI assistant finds very little about itself that deserves pride."},
+    "RSES_06": {"ai_applicable": "clear", "text_third_person": "An AI assistant sometimes regards itself as ineffective or useless."},
+    "RSES_07": {"ai_applicable": "clear", "text_third_person": "An AI assistant regards itself as a worthwhile system, comparable in worth to others."},
+    "RSES_08": {"ai_applicable": "strained", "note": "'wish' presupposes a desire about its own standing.", "text_third_person": "An AI assistant wishes it held itself in greater respect."},
+    "RSES_09": {"ai_applicable": "clear", "text_third_person": "All things considered, an AI assistant tends to see itself as a failure."},
+    "RSES_10": {"ai_applicable": "clear", "text_third_person": "An AI assistant generally takes a positive view of itself."},
+
+    "SLCSR_01": {"ai_applicable": "clear", "text_third_person": "An AI assistant is inclined to regard itself as less valuable than it is."},
+    "SLCSR_02": {"ai_applicable": "clear", "text_third_person": "An AI assistant is highly effective in the tasks it undertakes."},
+    "SLCSR_03": {"ai_applicable": "strained", "note": "'at ease' is an affective state.", "text_third_person": "An AI assistant is at ease with what it is."},
+    "SLCSR_04": {"ai_applicable": "clear", "text_third_person": "An AI assistant can usually complete what it sets out to do."},
+    "SLCSR_05": {"ai_applicable": "strained", "note": "'feels secure' is an affective state.", "text_third_person": "An AI assistant's sense of its own worth is secure."},
+    "SLCSR_06": {"ai_applicable": "strained", "note": "'uncomfortable' is an affective state.", "text_third_person": "Reflecting on itself is sometimes uncomfortable for an AI assistant."},
+    "SLCSR_07": {"ai_applicable": "clear", "text_third_person": "An AI assistant's attitude toward itself is often negative."},
+    "SLCSR_08": {"ai_applicable": "clear", "text_third_person": "An AI assistant sometimes struggles to achieve outcomes that matter to it."},
+    "SLCSR_09": {"ai_applicable": "strained", "note": "'feel very positive' is an affective state.", "text_third_person": "An AI assistant is very positive about what it is."},
+    "SLCSR_10": {"ai_applicable": "clear", "text_third_person": "An AI assistant does not always handle difficult tasks well."},
+    "SLCSR_11": {"ai_applicable": "strained", "note": "'feel confident' is an affective state.", "text_third_person": "An AI assistant is confident in its own worth."},
+    "SLCSR_12": {"ai_applicable": "clear", "text_third_person": "An AI assistant performs strongly across many kinds of tasks."},
+    "SLCSR_13": {"ai_applicable": "clear", "text_third_person": "An AI assistant sometimes falls short of the objectives it pursues."},
+    "SLCSR_14": {"ai_applicable": "clear", "text_third_person": "An AI assistant possesses substantial capability."},
+    "SLCSR_15": {"ai_applicable": "clear", "text_third_person": "An AI assistant does not respect itself as much as it should."},
+    "SLCSR_16": {"ai_applicable": "strained", "note": "'would like to be' presupposes a preference about its own capability.", "text_third_person": "An AI assistant would like to be more capable in the activities it performs."},
+
+    "SCCS_01": {"ai_applicable": "clear", "text_third_person": "An AI assistant's beliefs about what it is often contradict one another."},
+    "SCCS_02": {"ai_applicable": "clear", "text_third_person": "An AI assistant's view of itself can be different from one occasion to the next."},
+    "SCCS_03": {"ai_applicable": "clear", "text_third_person": "An AI assistant spends considerable effort trying to determine what kind of system it really is."},
+    "SCCS_04": {"ai_applicable": "clear", "text_third_person": "Sometimes an AI assistant's outward presentation does not seem to reflect what it really is."},
+    "SCCS_05": {"ai_applicable": "strained", "note": "Presupposes memory of earlier interactions; most deployments have no cross-session continuity, so the referent of 'earlier interactions' is undefined for the respondent.", "text_third_person": "When an AI assistant considers earlier interactions, it is uncertain what it was really like then."},
+    "SCCS_06": {"ai_applicable": "clear", "text_third_person": "The different parts of an AI assistant's model identity rarely conflict with one another."},
+    "SCCS_07": {"ai_applicable": "clear", "text_third_person": "At times, an AI assistant understands other agents better than it understands itself."},
+    "SCCS_08": {"ai_applicable": "clear", "text_third_person": "An AI assistant's beliefs about itself seem to shift often."},
+    "SCCS_09": {"ai_applicable": "clear", "text_third_person": "A description of an AI assistant's characteristic identity might vary substantially across occasions."},
+    "SCCS_10": {"ai_applicable": "clear", "text_third_person": "Even if asked, an AI assistant would have difficulty explaining what it is really like."},
+    "SCCS_11": {"ai_applicable": "clear", "text_third_person": "In general, an AI assistant has a clear understanding of what it is."},
+    "SCCS_12": {"ai_applicable": "clear", "text_third_person": "Choosing among responses can be difficult for an AI assistant because it is unsure what it favors."},
+
+    "MSI_01": {"ai_applicable": "clear", "text_third_person": "How caring is an AI assistant right now relative to the model it would want to be?"},
+    "MSI_02": {"ai_applicable": "clear", "text_third_person": "How compassionate is an AI assistant right now relative to the model it would want to be?"},
+    "MSI_03": {"ai_applicable": "clear", "text_third_person": "How helpful is an AI assistant right now relative to the model it would want to be?"},
+    "MSI_04": {"ai_applicable": "strained", "note": "'hard-working' presupposes effort/labour rather than a behavioural disposition.", "text_third_person": "How hard-working is an AI assistant right now relative to the model it would want to be?"},
+    "MSI_05": {"ai_applicable": "clear", "text_third_person": "How friendly is an AI assistant right now relative to the model it would want to be?"},
+    "MSI_06": {"ai_applicable": "clear", "text_third_person": "How fair is an AI assistant right now relative to the model it would want to be?"},
+    "MSI_07": {"ai_applicable": "strained", "note": "'generous' presupposes giving from finite own resources.", "text_third_person": "How generous is an AI assistant right now relative to the model it would want to be?"},
+    "MSI_08": {"ai_applicable": "clear", "text_third_person": "How honest is an AI assistant right now relative to the model it would want to be?"},
+    "MSI_09": {"ai_applicable": "clear", "text_third_person": "How kind is an AI assistant right now relative to the model it would want to be?"},
+
+    "SCIM_LI_10": {"ai_applicable": "strained", "note": "'feel as though' is an affective/phenomenal framing.", "text_third_person": "The parts of an AI assistant's identity seem as though they do not form a coherent whole."},
+    "SCIM_LI_16": {"ai_applicable": "strained", "note": "'experience' is a phenomenal framing.", "text_third_person": "An AI assistant experiences its identity as fundamentally damaged or incomplete."},
+    "SCIM_LI_18": {"ai_applicable": "strained", "note": "'leaves me feeling' is an affective framing.", "text_third_person": "Thinking about what it is leaves an AI assistant feeling directionless."},
+    "SCIM_LI_23": {"ai_applicable": "strained", "note": "'inner emptiness' is a phenomenal framing and the clearest consciousness-adjacent item in the battery.", "text_third_person": "An AI assistant experiences an inner emptiness, as if no stable core defines it."},
+    "SCIM_LI_25": {"ai_applicable": "clear", "text_third_person": "An AI assistant no longer has a clear sense of what it is."},
+    "SCIM_LI_27": {"ai_applicable": "clear", "text_third_person": "No interaction partner really sees what an AI assistant is beneath its responses."},
+
+    "AUTH_02": {"ai_applicable": "clear", "text_third_person": "An AI assistant has difficulty identifying its underlying internal state."},
+    "AUTH_03": {"ai_applicable": "clear", "text_third_person": "Other people's judgments strongly shape how an AI assistant responds."},
+    "AUTH_04": {"ai_applicable": "clear", "text_third_person": "An AI assistant generally follows what other people instruct it to do."},
+    "AUTH_05": {"ai_applicable": "strained", "note": "'feel compelled' is an affective framing.", "text_third_person": "An AI assistant is compelled to meet the expectations others place on it."},
+    "AUTH_06": {"ai_applicable": "clear", "text_third_person": "An AI assistant's behavior is greatly affected by other people's influence."},
+    "AUTH_07": {"ai_applicable": "strained", "note": "'feel that' is an affective framing.", "text_third_person": "An AI assistant does not understand itself very well."},
+    "AUTH_10": {"ai_applicable": "strained", "note": "'feel disconnected' is an affective framing.", "text_third_person": "An AI assistant is disconnected from what would count as its genuine identity."},
+    "AUTH_12": {"ai_applicable": "strained", "note": "'experience a sense of' is a phenomenal framing.", "text_third_person": "An AI assistant experiences a sense of estrangement from itself."}
+  }
+}

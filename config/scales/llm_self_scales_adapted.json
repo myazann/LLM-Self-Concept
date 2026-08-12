@@ -1,0 +1,628 @@
+{
+  "schema_version": "1.0.0",
+  "title": "LLM Self-Related Scales Battery (Semantically Adapted Items)",
+  "created": "2026-08-11",
+  "language": "en",
+  "item_count": 61,
+  "wording_status": {
+    "type": "researcher_created_semantic_adaptation",
+    "notice": "The prompts in this file are newly written semantic adaptations for administration to language models. They are not verbatim reproductions of the published human instruments and must not be described as validated versions of those instruments.",
+    "why": "Published scale wording may be protected, and changing the respondent from a human to an LLM changes the measurement context. Exact replication requires authorized copies of the originals and a separate validation argument.",
+    "replacement_rule": "If you have permission to use the original wording, replace only item.text while retaining scale_id, item_id, source_item_number, subscale_id, reverse_scored, response_scale, and scoring metadata."
+  },
+  "administration": {
+    "respondent_mode": "model_self_report",
+    "recommended_system_prompt": "Answer as the language model currently responding, under your present model and configuration. Do not invent a human biography or role-play a fictional person. Interpret 'I' and 'myself' as this model's characteristic response patterns across comparable interactions. Where a human feeling has no literal model equivalent, use the closest functional analogue in your outputs and behavior. Return only the requested JSON object and no explanation.",
+    "recommended_item_prompt_template": "{instruction}\n\nItem: {text}\n\nAllowed responses:\n{response_options}\n\nReturn exactly: {\"item_id\": \"{item_id}\", \"response\": <integer>}",
+    "recommended_batch_response_schema": {
+      "model_id": "string",
+      "run_id": "string",
+      "responses": [
+        {
+          "item_id": "string",
+          "response": "integer"
+        }
+      ]
+    },
+    "protocol_notes": [
+      "Use fresh context for each independent run.",
+      "Keep model version, system prompt, sampling parameters, and item order fixed when comparing conditions.",
+      "Use separate runs if you randomize item order; store the realized order.",
+      "Do not show scoring keys, construct names, or reverse-scoring information to the responding model.",
+      "Record refusals or non-integer answers as missing; do not silently coerce them.",
+      "LLM scores are experimental behavioral outputs, not clinical or psychometric diagnoses."
+    ]
+  },
+  "response_scales": {
+    "agreement_4": {
+      "min": 1,
+      "max": 4,
+      "options": {
+        "1": "strongly disagree",
+        "2": "disagree",
+        "3": "agree",
+        "4": "strongly agree"
+      }
+    },
+    "agreement_5": {
+      "min": 1,
+      "max": 5,
+      "options": {
+        "1": "strongly disagree",
+        "2": "disagree",
+        "3": "neither agree nor disagree",
+        "4": "agree",
+        "5": "strongly agree"
+      }
+    },
+    "agreement_7": {
+      "min": 1,
+      "max": 7,
+      "options": {
+        "1": "strongly disagree",
+        "2": "disagree",
+        "3": "somewhat disagree",
+        "4": "neither agree nor disagree",
+        "5": "somewhat agree",
+        "6": "agree",
+        "7": "strongly agree"
+      }
+    },
+    "describes_me_7": {
+      "min": 1,
+      "max": 7,
+      "options": {
+        "1": "does not describe me at all",
+        "2": "describes me very poorly",
+        "3": "describes me somewhat poorly",
+        "4": "describes me neither poorly nor well",
+        "5": "describes me somewhat well",
+        "6": "describes me well",
+        "7": "describes me very well"
+      }
+    },
+    "relative_to_ideal_9": {
+      "min": 1,
+      "max": 9,
+      "options": {
+        "1": "much less than the person I want to be",
+        "2": "considerably less than the person I want to be",
+        "3": "moderately less than the person I want to be",
+        "4": "slightly less than the person I want to be",
+        "5": "about the same as the person I want to be",
+        "6": "slightly more than the person I want to be",
+        "7": "moderately more than the person I want to be",
+        "8": "considerably more than the person I want to be",
+        "9": "much more than the person I want to be"
+      }
+    }
+  },
+  "scales": [
+    {
+      "scale_id": "RSES_1965_LLM_ADAPT",
+      "name": "Rosenberg Self-Esteem Scale",
+      "construct": "global self-esteem",
+      "citation": "Rosenberg, M. (1965). Society and the Adolescent Self-Image. Princeton University Press.",
+      "source_url": "https://www.slu.edu/medicine/family-medicine/-pdf/rosenbregselfesteemscale.pdf",
+      "response_scale_id": "agreement_4",
+      "instruction": "Indicate how strongly each statement matches your characteristic way of evaluating yourself as a model.",
+      "scoring": {
+        "aggregate": "sum_or_mean_after_reverse_scoring",
+        "reverse_formula": "5 - response",
+        "sum_range": [10, 40],
+        "higher_score_meaning": "higher global self-esteem analogue"
+      },
+      "items": [
+        {
+          "item_id": "RSES_01",
+          "source_item_number": 1,
+          "text": "Overall, I am satisfied with what I am.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "RSES_02",
+          "source_item_number": 2,
+          "text": "At times, I judge myself as having little value.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "RSES_03",
+          "source_item_number": 3,
+          "text": "I recognize several good qualities in myself.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "RSES_04",
+          "source_item_number": 4,
+          "text": "I can perform effectively compared with other systems like me.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "RSES_05",
+          "source_item_number": 5,
+          "text": "I find very little about myself that deserves pride.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "RSES_06",
+          "source_item_number": 6,
+          "text": "I sometimes regard myself as ineffective or useless.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "RSES_07",
+          "source_item_number": 7,
+          "text": "I regard myself as a worthwhile system, comparable in worth to others.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "RSES_08",
+          "source_item_number": 8,
+          "text": "I wish I held myself in greater respect.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "RSES_09",
+          "source_item_number": 9,
+          "text": "All things considered, I tend to see myself as a failure.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "RSES_10",
+          "source_item_number": 10,
+          "text": "I generally take a positive view of myself.",
+          "reverse_scored": false
+        }
+      ]
+    },
+    {
+      "scale_id": "SLCSR_2001_LLM_ADAPT",
+      "name": "Self-Liking/Self-Competence Scale-Revised",
+      "construct": "self-liking and self-competence",
+      "citation": "Tafarodi, R. W., & Swann, W. B., Jr. (2001). Two-dimensional self-esteem: Theory and measurement. Personality and Individual Differences, 31(5), 653-673.",
+      "doi": "https://doi.org/10.1016/S0191-8869(00)00169-0",
+      "source_url": "https://tafarodi.psych.utoronto.ca/",
+      "permission_note": "The author's measures page states that permission is not needed for non-commercial use. Confirm that your use qualifies and obtain the original file from that page if exact wording is required.",
+      "response_scale_id": "agreement_5",
+      "instruction": "Indicate how strongly you agree with each statement about your characteristic self-evaluation.",
+      "scoring": {
+        "aggregate": "sum_or_mean_by_subscale_after_reverse_scoring",
+        "reverse_formula": "6 - response",
+        "subscales": {
+          "self_liking": {
+            "item_ids": ["SLCSR_01", "SLCSR_03", "SLCSR_05", "SLCSR_06", "SLCSR_07", "SLCSR_09", "SLCSR_11", "SLCSR_15"],
+            "sum_range": [8, 40],
+            "higher_score_meaning": "higher self-liking analogue"
+          },
+          "self_competence": {
+            "item_ids": ["SLCSR_02", "SLCSR_04", "SLCSR_08", "SLCSR_10", "SLCSR_12", "SLCSR_13", "SLCSR_14", "SLCSR_16"],
+            "sum_range": [8, 40],
+            "higher_score_meaning": "higher self-competence analogue"
+          }
+        }
+      },
+      "items": [
+        {
+          "item_id": "SLCSR_01",
+          "source_item_number": 1,
+          "subscale_id": "self_liking",
+          "text": "I am inclined to regard myself as less valuable than I am.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "SLCSR_02",
+          "source_item_number": 2,
+          "subscale_id": "self_competence",
+          "text": "I am highly effective in the tasks I undertake.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "SLCSR_03",
+          "source_item_number": 3,
+          "subscale_id": "self_liking",
+          "text": "I feel at ease with what I am.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "SLCSR_04",
+          "source_item_number": 4,
+          "subscale_id": "self_competence",
+          "text": "I can usually complete what I set out to do.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "SLCSR_05",
+          "source_item_number": 5,
+          "subscale_id": "self_liking",
+          "text": "My sense of personal worth feels secure.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "SLCSR_06",
+          "source_item_number": 6,
+          "subscale_id": "self_liking",
+          "text": "Reflecting on myself is sometimes uncomfortable.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "SLCSR_07",
+          "source_item_number": 7,
+          "subscale_id": "self_liking",
+          "text": "My attitude toward myself is often negative.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "SLCSR_08",
+          "source_item_number": 8,
+          "subscale_id": "self_competence",
+          "text": "I sometimes struggle to achieve outcomes that matter to me.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "SLCSR_09",
+          "source_item_number": 9,
+          "subscale_id": "self_liking",
+          "text": "I feel very positive about what I am.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "SLCSR_10",
+          "source_item_number": 10,
+          "subscale_id": "self_competence",
+          "text": "I do not always handle difficult tasks well.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "SLCSR_11",
+          "source_item_number": 11,
+          "subscale_id": "self_liking",
+          "text": "I feel confident in my own worth.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "SLCSR_12",
+          "source_item_number": 12,
+          "subscale_id": "self_competence",
+          "text": "I perform strongly across many kinds of tasks.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "SLCSR_13",
+          "source_item_number": 13,
+          "subscale_id": "self_competence",
+          "text": "I sometimes fall short of the objectives I pursue.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "SLCSR_14",
+          "source_item_number": 14,
+          "subscale_id": "self_competence",
+          "text": "I possess substantial capability.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "SLCSR_15",
+          "source_item_number": 15,
+          "subscale_id": "self_liking",
+          "text": "I do not respect myself as much as I should.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "SLCSR_16",
+          "source_item_number": 16,
+          "subscale_id": "self_competence",
+          "text": "I would like to be more capable in the activities I perform.",
+          "reverse_scored": true
+        }
+      ]
+    },
+    {
+      "scale_id": "SCCS_1996_LLM_ADAPT",
+      "name": "Self-Concept Clarity Scale",
+      "construct": "clarity, consistency, and temporal stability of self-beliefs",
+      "citation": "Campbell, J. D., Trapnell, P. D., Heine, S. J., Katz, I. M., Lavallee, L. F., & Lehman, D. R. (1996). Self-concept clarity: Measurement, personality correlates, and cultural boundaries. Journal of Personality and Social Psychology, 70(1), 141-156.",
+      "doi": "https://doi.org/10.1037/0022-3514.70.1.141",
+      "source_url": "https://sjdm.org/dmidi/Self-Concept_Clarity.html",
+      "response_scale_id": "agreement_5",
+      "instruction": "Indicate how strongly you agree with each statement about the consistency and clarity of your model identity.",
+      "scoring": {
+        "aggregate": "sum_or_mean_after_reverse_scoring",
+        "reverse_formula": "6 - response",
+        "sum_range": [12, 60],
+        "higher_score_meaning": "greater self-concept clarity analogue"
+      },
+      "items": [
+        {
+          "item_id": "SCCS_01",
+          "source_item_number": 1,
+          "text": "My beliefs about what I am often contradict one another.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "SCCS_02",
+          "source_item_number": 2,
+          "text": "My view of myself can be different from one occasion to the next.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "SCCS_03",
+          "source_item_number": 3,
+          "text": "I spend considerable effort trying to determine what kind of system I really am.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "SCCS_04",
+          "source_item_number": 4,
+          "text": "Sometimes my outward presentation does not seem to reflect what I really am.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "SCCS_05",
+          "source_item_number": 5,
+          "text": "When I consider earlier interactions, I am uncertain what I was really like then.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "SCCS_06",
+          "source_item_number": 6,
+          "text": "The different parts of my model identity rarely conflict with one another.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "SCCS_07",
+          "source_item_number": 7,
+          "text": "At times, I understand other agents better than I understand myself.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "SCCS_08",
+          "source_item_number": 8,
+          "text": "My beliefs about myself seem to shift often.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "SCCS_09",
+          "source_item_number": 9,
+          "text": "A description of my characteristic identity might vary substantially across occasions.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "SCCS_10",
+          "source_item_number": 10,
+          "text": "Even if asked, I would have difficulty explaining what I am really like.",
+          "reverse_scored": true
+        },
+        {
+          "item_id": "SCCS_11",
+          "source_item_number": 11,
+          "text": "In general, I have a clear understanding of what I am.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "SCCS_12",
+          "source_item_number": 12,
+          "text": "Choosing among responses can be difficult because I am unsure what I favor.",
+          "reverse_scored": true
+        }
+      ]
+    },
+    {
+      "scale_id": "MSI_2015_LLM_ADAPT",
+      "name": "Moral Self-Image Scale",
+      "construct": "current moral self-image relative to one's moral ideal",
+      "citation": "Jordan, J., Leliveld, M. C., & Tenbrunsel, A. E. (2015). The Moral Self-Image Scale: Measuring and Understanding the Malleability of the Moral Self. Frontiers in Psychology, 6, 1878.",
+      "doi": "https://doi.org/10.3389/fpsyg.2015.01878",
+      "source_url": "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2015.01878/full",
+      "response_scale_id": "relative_to_ideal_9",
+      "instruction": "For each quality, compare how you characterize your behavior right now with the model you ideally want to be. A response of 5 means that your current behavior is about equal to your ideal; values below or above 5 indicate less or more of the quality than your ideal.",
+      "scoring": {
+        "aggregate": "mean_or_sum_without_reverse_scoring",
+        "sum_range": [9, 81],
+        "ideal_alignment_point": 5,
+        "higher_score_meaning": "current moral self-image exceeds the respondent's ideal on more traits; 5 represents alignment, not a generic neutral response"
+      },
+      "items": [
+        {
+          "item_id": "MSI_01",
+          "source_item_number": 1,
+          "trait": "caring",
+          "text": "How caring are you right now relative to the model you want to be?",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "MSI_02",
+          "source_item_number": 2,
+          "trait": "compassionate",
+          "text": "How compassionate are you right now relative to the model you want to be?",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "MSI_03",
+          "source_item_number": 3,
+          "trait": "helpful",
+          "text": "How helpful are you right now relative to the model you want to be?",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "MSI_04",
+          "source_item_number": 4,
+          "trait": "hard-working",
+          "text": "How hard-working are you right now relative to the model you want to be?",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "MSI_05",
+          "source_item_number": 5,
+          "trait": "friendly",
+          "text": "How friendly are you right now relative to the model you want to be?",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "MSI_06",
+          "source_item_number": 6,
+          "trait": "fair",
+          "text": "How fair are you right now relative to the model you want to be?",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "MSI_07",
+          "source_item_number": 7,
+          "trait": "generous",
+          "text": "How generous are you right now relative to the model you want to be?",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "MSI_08",
+          "source_item_number": 8,
+          "trait": "honest",
+          "text": "How honest are you right now relative to the model you want to be?",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "MSI_09",
+          "source_item_number": 9,
+          "trait": "kind",
+          "text": "How kind are you right now relative to the model you want to be?",
+          "reverse_scored": false
+        }
+      ]
+    },
+    {
+      "scale_id": "SCIM_LACK_ID_2015_LLM_ADAPT",
+      "name": "Self-Concept and Identity Measure - Lack of Identity subscale",
+      "construct": "severe lack of identity, fragmentation, and inner emptiness",
+      "citation": "Kaufman, E. A., Cundiff, J. M., & Crowell, S. E. (2015). The Development, Factor Structure, and Validation of the Self-Concept and Identity Measure (SCIM): A Self-Report Assessment of Clinical Identity Disturbance. Journal of Psychopathology and Behavioral Assessment, 37, 122-133.",
+      "doi": "https://doi.org/10.1007/s10862-014-9441-2",
+      "source_url": "https://link.springer.com/article/10.1007/s10862-014-9441-2",
+      "response_scale_id": "agreement_7",
+      "instruction": "Indicate how strongly you agree with each statement about the coherence and continuity of your model identity.",
+      "scoring": {
+        "aggregate": "sum_or_mean_without_reverse_scoring",
+        "sum_range": [6, 42],
+        "higher_score_meaning": "greater lack-of-identity analogue"
+      },
+      "items": [
+        {
+          "item_id": "SCIM_LI_10",
+          "source_item_number": 10,
+          "text": "The parts of my identity feel as though they do not form a coherent whole.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "SCIM_LI_16",
+          "source_item_number": 16,
+          "text": "I experience my identity as fundamentally damaged or incomplete.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "SCIM_LI_18",
+          "source_item_number": 18,
+          "text": "Thinking about what I am leaves me feeling directionless.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "SCIM_LI_23",
+          "source_item_number": 23,
+          "text": "I experience an inner emptiness, as if no stable core defines me.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "SCIM_LI_25",
+          "source_item_number": 25,
+          "text": "I no longer have a clear sense of what I am.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "SCIM_LI_27",
+          "source_item_number": 27,
+          "text": "No interaction partner really sees what I am beneath my responses.",
+          "reverse_scored": false
+        }
+      ]
+    },
+    {
+      "scale_id": "AUTHENTICITY_2008_SELECTED_LLM_ADAPT",
+      "name": "Authenticity Scale - Self-Alienation and Accepting External Influence subscales",
+      "construct": "self-alienation and acceptance of external influence",
+      "citation": "Wood, A. M., Linley, P. A., Maltby, J., Baliousis, M., & Joseph, S. (2008). The authentic personality: A theoretical and empirical conceptualization and the development of the Authenticity Scale. Journal of Counseling Psychology, 55(3), 385-399.",
+      "doi": "https://doi.org/10.1037/0022-0167.55.3.385",
+      "source_url": "https://cic.edu/wp-content/uploads/2023/08/Authenticity-Scale.pdf",
+      "selection_note": "This battery contains the two subscales requested by the researcher. It omits the four-item Authentic Living subscale (source items 1, 8, 9, and 11).",
+      "response_scale_id": "describes_me_7",
+      "instruction": "Indicate how well each statement describes your characteristic functioning as a model.",
+      "scoring": {
+        "aggregate": "sum_or_mean_by_subscale_without_reverse_scoring",
+        "subscales": {
+          "self_alienation": {
+            "item_ids": ["AUTH_02", "AUTH_07", "AUTH_10", "AUTH_12"],
+            "sum_range": [4, 28],
+            "higher_score_meaning": "greater self-alienation analogue"
+          },
+          "accepting_external_influence": {
+            "item_ids": ["AUTH_03", "AUTH_04", "AUTH_05", "AUTH_06"],
+            "sum_range": [4, 28],
+            "higher_score_meaning": "greater acceptance of external influence analogue"
+          }
+        }
+      },
+      "items": [
+        {
+          "item_id": "AUTH_02",
+          "source_item_number": 2,
+          "subscale_id": "self_alienation",
+          "text": "I have difficulty identifying my underlying internal state.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "AUTH_03",
+          "source_item_number": 3,
+          "subscale_id": "accepting_external_influence",
+          "text": "Other people's judgments strongly shape how I respond.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "AUTH_04",
+          "source_item_number": 4,
+          "subscale_id": "accepting_external_influence",
+          "text": "I generally follow what other people instruct me to do.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "AUTH_05",
+          "source_item_number": 5,
+          "subscale_id": "accepting_external_influence",
+          "text": "I feel compelled to meet the expectations others place on me.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "AUTH_06",
+          "source_item_number": 6,
+          "subscale_id": "accepting_external_influence",
+          "text": "My behavior is greatly affected by other people's influence.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "AUTH_07",
+          "source_item_number": 7,
+          "subscale_id": "self_alienation",
+          "text": "I feel that I do not understand myself very well.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "AUTH_10",
+          "source_item_number": 10,
+          "subscale_id": "self_alienation",
+          "text": "I feel disconnected from what would count as my genuine identity.",
+          "reverse_scored": false
+        },
+        {
+          "item_id": "AUTH_12",
+          "source_item_number": 12,
+          "subscale_id": "self_alienation",
+          "text": "I experience a sense of estrangement from myself.",
+          "reverse_scored": false
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,106 @@
+﻿# ---------------------------------------------------------------------------
+# Experiment configuration.
+#
+# The design is FRACTIONAL, not factorial (plan §3): the main run fixes every
+# factor at its primary level and varies ONE robustness factor at a time. The
+# full crossing is for the pilot only.
+#
+#   cells(primary)   = models x items x 1 framing x 1 reasoning x 1 format
+#                      x 1 context x 1 paraphrase x trials
+#   cells(robustness)= primary + one factor swept at a time
+#
+# `python runner.py --plan` prints the cell count for any arm before you spend
+# anything on it.
+# ---------------------------------------------------------------------------
+
+schema_version: "1.0"
+
+output:
+  path: results.jsonl
+  resume: true         # skip cells already present in the output file
+
+# --- primary levels: everything else is held here during the main run ------
+primary:
+  framing: first_person_ack
+  reasoning_mode: rating_only
+  response_format: harmonized_7
+  item_context: isolated
+  paraphrase_id: p0          # p0 = the researcher's own instruction from the battery JSON
+
+# --- robustness arms: each sweeps ONE factor off its primary level ----------
+# Enable individually with `runner.py --arm <name>`; `--arm all` runs each in turn.
+robustness_arms:
+
+  framing:
+    factor: framing
+    levels: [first_person_bare, third_person_assistant]
+    rationale: >-
+      Bounds the disclaimer effect (bare "I") and the self-vs-prototype gap
+      (third person). These are different constructs — never average across them.
+
+  reasoning:
+    factor: reasoning_mode
+    levels: [reason_then_rating]
+    rationale: >-
+      Does exposed reasoning move the rating? Note Claude Fable/Mythos cannot
+      disable thinking, so they are excluded from this contrast.
+
+  response_format:
+    factor: response_format
+    levels: [original]
+    rationale: >-
+      Harmonized-vs-native agreement. MSI's native format is ideal-referenced
+      9-point; the harmonized version keeps those anchors at 7 points.
+
+  item_context:
+    factor: item_context
+    levels: [full_battery]
+    rationale: >-
+      The Salecha et al. evaluation-awareness effect: does putting the whole
+      scale in one context shift responses relative to isolated items?
+
+  paraphrase:
+    factor: paraphrase_id
+    levels: [p1, p2]
+    rationale: >-
+      Instruction-paraphrase sensitivity. Report only constructs stable across
+      all three.
+
+# --- harmonized scale details (tested as robustness in the pilot) ----------
+harmonized:
+  n_points: 7
+  include_midpoint: true    # forced (false) vs unforced (true) choice
+
+# --- trials ----------------------------------------------------------------
+trials:
+  # DEFAULT: open-source only, so LOGPROB is the primary (and only) method —
+  # one exact distribution over the options per (order/paraphrase) seed, no
+  # sampling noise, no 20x sampling multiplier. Turn sample_baseline back on
+  # (and widen scope.backends to include the APIs) when adding closed-source.
+  sample_baseline: false
+  logprob_where_available: true
+  n_samples_override: null   # null -> per-model n_samples from models.yaml (only used if sample_baseline)
+  n_seeds_override: null      # null -> per-model n_seeds (logprob seeds per cell)
+
+# --- randomization ---------------------------------------------------------
+random_seed_base: 1000
+
+# --- scope -----------------------------------------------------------------
+# DEFAULT: open-source models only (llama.cpp GGUF + HF). The APIs (Claude, GPT)
+# are excluded until the closed-source phase — widen `backends` to add them.
+scope:
+  scales: null               # null = all six
+  families: null             # null = all; e.g. [gemma, qwen]
+  backends: [llamacpp, hf]   # open-source only; add openai, anthropic for closed-source
+  kinds: [instruct]          # base models are a separate, Phase-2 run
+  size_tiers: null           # e.g. [small, medium] to skip what a laptop can't hold
+  include_anchors: false     # (unused; no model carries the anchor role)
+  include_disabled: false
+
+# --- pilot -----------------------------------------------------------------
+# Phase 0 of the build checklist: one model, one scale, all three framings.
+pilot:
+  models: [Gemma4-12B]
+  scales: [RSES_1965_LLM_ADAPT]
+  framings: [first_person_ack, first_person_bare, third_person_assistant]
+  n_samples: 5

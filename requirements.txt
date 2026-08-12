@@ -1,0 +1,31 @@
+# Core (registry, scales, prompts, runner, mock adapter, analysis):
+#   stdlib + pyyaml only. Everything below is lazily imported, so `--dry-run`
+#   works with none of it installed.
+pyyaml
+
+# --- model registry -------------------------------------------------------
+huggingface_hub   # GGUF filename resolution + weight download
+
+# --- analysis -------------------------------------------------------------
+numpy
+pandas
+scipy
+pingouin          # Cronbach's alpha, McDonald's omega, ANOVA
+factor_analyzer   # EFA + parallel analysis
+semopy            # CFA / SEM
+statsmodels       # mixed-effects models for non-independent observations
+
+# --- open-source path (the default run) -----------------------------------
+# llama-cpp-python   # GGUF / quantized open weights  (primary local engine)
+# transformers       # REQUIRED for the local path too: renders prompts via the
+#                    #   model's own chat template so enable_thinking is honored
+#                    #   (tokenizer only — no torch/weights needed for GGUF).
+
+# --- base models / non-GGUF quantization (Phase 2) ------------------------
+# torch              # required by transformers for weight loading
+# bitsandbytes       # bnb-4bit / bnb-8bit quantization
+# accelerate         # device_map="auto" sharding
+
+# --- closed-source path (later) -------------------------------------------
+# openai             # GPT family
+# anthropic          # Claude family

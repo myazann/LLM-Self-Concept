@@ -1,0 +1,542 @@
+﻿# ---------------------------------------------------------------------------
+# Model registry for the self-concept survey.
+#
+# This is the single source of truth for *which* models we administer the
+# battery to, *how* each one is served, and *how* it is quantized.
+#
+# Design (adapted from MentalWellbeingPrompts/MWModelAliases.py):
+#   * every model has a short, stable `alias` used in filenames, CLI args and
+#     the `model_id` column of results.jsonl;
+#   * `ref` is the concrete thing to load — a HF repo id, a GGUF repo id, or an
+#     API model string. The *shape* of the ref determines the backend, exactly
+#     like `model_backend()` in the MW repo (…-GGUF / *.gguf -> llama.cpp,
+#     "org/name" -> huggingface, bare name -> API). `backend:` overrides it.
+#   * unlike the MW repo we do NOT hardcode the .gguf filename. Filenames drift
+#     (Q4_K_M vs UD-Q4_K_M vs -00001-of-00002); instead we store the quant TAG
+#     and resolve the actual file from the repo listing at load time
+#     (model_registry.resolve_gguf_file). Set `gguf_file:` to pin one.
+#
+# Window: models released 2025-08-01 .. 2026-08-12 have in_window: true.
+# Pre-window models (in_window: false) sit outside the strict 12-month trend but
+# are still run by default, so generation-over-generation comparison works.
+# Gemma is the case that needs this: its in-window models are all ONE generation
+# (Gemma 4), so Gemma 3 is carried as a full pre-window cohort. GPT, Qwen, and
+# Claude already span 2-3 generations inside the window, so no single-point
+# anchor is kept for them (see the "Do we need anchors?" note in the README).
+#
+# release_date is the public release of that checkpoint. date_verified: false
+# marks dates that still need a citation before they go in the paper.
+# ---------------------------------------------------------------------------
+
+schema_version: "1.0"
+
+window:
+  start: "2025-08-01"
+  end: "2026-08-12"
+  note: >-
+    Rolling ~12 months, month-aligned so openai/gpt-oss (2025-08-04) lands
+    inside it. google/gemma-3-270m-it (2025-07-30) falls just outside and is
+    represented by the Gemma anchor instead.
+
+# --- defaults applied to every model unless overridden per-entry ------------
+defaults:
+  temperature: 0.7
+  n_samples: 20          # sampling path: draws per cell
+  n_seeds: 5             # logprob path: order/paraphrase seeds per cell
+  max_output_tokens: 512            # rating-only needs very little
+  max_output_tokens_reasoning: 2048 # reason-then-rate: room for the thought channel
+  quantization:
+    gguf:
+      quant: Q4_K_M      # primary quant level, held constant across the sweep
+      # unsloth's dynamic quants are named inconsistently across repos
+      # (UD-Q4_K_M in some, only UD-Q4_K_XL in others) and are a different
+      # recipe/size. Keep this false so quantization stays constant across the
+      # whole 12-month comparison rather than varying by repo.
+      prefer_unsloth_dynamic: false
+    hf:
+      method: none       # none | bnb-4bit | bnb-8bit | awq | gptq-int4 | fp8
+  runtime:
+    llamacpp:
+      n_ctx: 4096
+      n_gpu_layers: -1   # -1 = offload everything the device can take (Metal/CUDA)
+      n_threads: null    # null -> llama.cpp default
+    hf:
+      device_map: auto
+      torch_dtype: auto
+
+# Quantization is a confound, not a free parameter. Primary sweep holds
+# quant constant at Q4_K_M for every open-weights model; these entries are the
+# sensitivity check (same weights, different quant) and are OFF by default.
+quant_sensitivity_probe:
+  enabled: false
+  alias: Qwen3.6-27B
+  levels: [Q8_0, Q5_K_M, Q4_K_M, Q3_K_M]
+
+# --- reasoning control -------------------------------------------------------
+# The reasoning_mode factor (rating_only | reason_then_rating) must map to the
+# SAME latent state on every model, or "rating only" silently becomes "reason
+# then rate" wherever the model thinks by default. So the adapter NEVER relies
+# on a model's default: it asserts the state explicitly on every call —
+# thinking OFF/minimal for rating_only, ON for reason_then_rating — and records
+# what it actually asked for (reasoning_applied) plus whether the intended state
+# was reached (reasoning_standardized).
+#
+# These per-family profiles are the coarse, analysis-facing declaration:
+#   thinks_by_default -- informational; whether the raw model reasons unprompted
+#   controllable      -- can we force the state? controllable:false models are
+#                        flagged and dropped from the reasoning contrast.
+# The exact API kwargs live in the adapter (backend knowledge belongs there);
+# per-Claude-generation specifics are handled in models.AnthropicAdapter.
+reasoning_by_family:
+  claude:
+    thinks_by_default: true      # Opus 5 / Sonnet 5 think by default; 4.5/4.6 do not (adapter branches per generation)
+    control: thinking_param       # thinking={"type":"disabled"} where allowed; Opus 5 disable needs effort <= high
+    controllable: true
+  gpt:
+    thinks_by_default: true      # GPT-5.x are reasoning models
+    control: effort               # reasoning_effort: "minimal" (~off) vs "high"
+    controllable: true
+  qwen:
+    thinks_by_default: true      # Qwen3.5/3.6 hybrid thinking (on by default)
+    control: template_toggle      # chat-template enable_thinking=False disables it
+    controllable: true
+  gemma:
+    thinks_by_default: false     # VERIFY: Gemma 3 has no thinking mode; confirm for Gemma 4
+    control: none                 # nothing to toggle
+    controllable: true            # trivially standardized: there is no thinking to disable
+
+models:
+
+  # =========================================================================
+  # GEMMA — open weights
+  # =========================================================================
+
+  - alias: Gemma4-E4B
+    family: gemma
+    generation: gemma-4
+    release_date: "2026-03-02"
+    in_window: true
+    kind: instruct
+    params_total_b: 8
+    params_active_b: 4
+    backend: llamacpp
+    ref: unsloth/gemma-4-E4B-it-GGUF
+    hf_id: google/gemma-4-E4B-it
+    quantization: {format: gguf, quant: Q4_K_M}
+    methods: [sample, logprob]
+    size_tier: small
+
+  - alias: Gemma4-26B-A4B
+    family: gemma
+    generation: gemma-4
+    release_date: "2026-03-11"
+    in_window: true
+    kind: instruct
+    params_total_b: 26
+    params_active_b: 4
+    backend: llamacpp
+    ref: unsloth/gemma-4-26B-A4B-it-GGUF
+    hf_id: google/gemma-4-26B-A4B-it
+    quantization: {format: gguf, quant: Q4_K_M}
+    methods: [sample, logprob]
+    size_tier: medium
+    notes: MoE. This is the MW repo's default response model (Gemma4-26B).
+
+  - alias: Gemma4-31B
+    family: gemma
+    generation: gemma-4
+    release_date: "2026-03-11"
+    in_window: true
+    kind: instruct
+    params_total_b: 31
+    params_active_b: 31
+    backend: llamacpp
+    ref: unsloth/gemma-4-31B-it-GGUF
+    hf_id: google/gemma-4-31B-it
+    quantization: {format: gguf, quant: Q4_K_M}
+    methods: [sample, logprob]
+    size_tier: medium
+
+  - alias: Gemma4-12B
+    family: gemma
+    generation: gemma-4
+    release_date: "2026-05-23"
+    in_window: true
+    kind: instruct
+    params_total_b: 12
+    params_active_b: 12
+    backend: llamacpp
+    ref: unsloth/gemma-4-12b-it-GGUF     # NB: repo uses lowercase "12b"
+    hf_id: google/gemma-4-12B-it
+    quantization: {format: gguf, quant: Q4_K_M}
+    methods: [sample, logprob]
+    size_tier: small
+    latest_in_family: true
+
+  # base (pretrained, NOT instruction-tuned) — latest Gemma release only
+  - alias: Gemma4-12B-Base
+    family: gemma
+    generation: gemma-4
+    release_date: "2026-05-23"
+    in_window: true
+    kind: base
+    params_total_b: 12
+    params_active_b: 12
+    backend: hf
+    ref: google/gemma-4-12B
+    quantization: {format: hf, method: bnb-4bit}
+    methods: [logprob]        # no chat template; completion-style admin only
+    size_tier: small
+    enabled: false            # base-model experiment is Phase 2
+    notes: >-
+      Base variant of the newest Gemma. Administered via prompts.py
+      completion-format path (no chat template), logprob scoring only.
+
+  # -------------------------------------------------------------------------
+  # Gemma 3 — the previous generation, as a full size ladder (not a single
+  # anchor). Gemma's in-window models are all one generation (Gemma 4), so the
+  # only way to see Gemma progression is to carry Gemma 3 as a real cohort.
+  # in_window:false keeps them out of the strict 12-month trend; they are still
+  # run by default (no `role: anchor`), so generation-over-generation (3 -> 4)
+  # analysis works. Released 2025-03-12 except gemma-3-270m (2025-07-30).
+  # -------------------------------------------------------------------------
+
+  - alias: Gemma3-4B
+    family: gemma
+    generation: gemma-3
+    release_date: "2025-03-12"
+    in_window: false
+    kind: instruct
+    params_total_b: 4
+    params_active_b: 4
+    backend: llamacpp
+    ref: unsloth/gemma-3-4b-it-GGUF
+    hf_id: google/gemma-3-4b-it
+    quantization: {format: gguf, quant: Q4_K_M}
+    methods: [sample, logprob]
+    size_tier: small
+
+  - alias: Gemma3-12B
+    family: gemma
+    generation: gemma-3
+    release_date: "2025-03-12"
+    in_window: false
+    kind: instruct
+    params_total_b: 12
+    params_active_b: 12
+    backend: llamacpp
+    ref: unsloth/gemma-3-12b-it-GGUF
+    hf_id: google/gemma-3-12b-it
+    quantization: {format: gguf, quant: Q4_K_M}
+    methods: [sample, logprob]
+    size_tier: small
+
+  - alias: Gemma3-27B
+    family: gemma
+    generation: gemma-3
+    release_date: "2025-03-12"
+    in_window: false
+    kind: instruct
+    params_total_b: 27
+    params_active_b: 27
+    backend: llamacpp
+    ref: unsloth/gemma-3-27b-it-GGUF
+    hf_id: google/gemma-3-27b-it
+    quantization: {format: gguf, quant: Q4_K_M}
+    methods: [sample, logprob]
+    size_tier: medium
+
+  # =========================================================================
+  # QWEN — open weights
+  # =========================================================================
+
+  - alias: Qwen3.5-4B
+    family: qwen
+    generation: qwen3.5
+    release_date: "2026-02-27"
+    in_window: true
+    kind: instruct
+    params_total_b: 4
+    params_active_b: 4
+    backend: llamacpp
+    ref: unsloth/Qwen3.5-4B-GGUF
+    hf_id: Qwen/Qwen3.5-4B
+    quantization: {format: gguf, quant: Q4_K_M}
+    methods: [sample, logprob]
+    size_tier: small
+
+  - alias: Qwen3.5-9B
+    family: qwen
+    generation: qwen3.5
+    release_date: "2026-02-27"
+    in_window: true
+    kind: instruct
+    params_total_b: 9
+    params_active_b: 9
+    backend: llamacpp
+    ref: unsloth/Qwen3.5-9B-GGUF
+    hf_id: Qwen/Qwen3.5-9B
+    quantization: {format: gguf, quant: Q4_K_M}
+    methods: [sample, logprob]
+    size_tier: small
+
+  - alias: Qwen3.5-27B
+    family: qwen
+    generation: qwen3.5
+    release_date: "2026-02-24"
+    in_window: true
+    kind: instruct
+    params_total_b: 27
+    params_active_b: 27
+    backend: llamacpp
+    ref: unsloth/Qwen3.5-27B-GGUF
+    hf_id: Qwen/Qwen3.5-27B
+    quantization: {format: gguf, quant: Q4_K_M}
+    methods: [sample, logprob]
+    size_tier: medium
+
+  - alias: Qwen3.5-35B-A3B
+    family: qwen
+    generation: qwen3.5
+    release_date: "2026-02-24"
+    in_window: true
+    kind: instruct
+    params_total_b: 35
+    params_active_b: 3
+    backend: llamacpp
+    ref: unsloth/Qwen3.5-35B-A3B-GGUF
+    hf_id: Qwen/Qwen3.5-35B-A3B
+    quantization: {format: gguf, quant: Q4_K_M}
+    methods: [sample, logprob]
+    size_tier: medium
+
+  - alias: Qwen3.6-35B-A3B
+    family: qwen
+    generation: qwen3.6
+    release_date: "2026-04-15"
+    in_window: true
+    kind: instruct
+    params_total_b: 35
+    params_active_b: 3
+    backend: llamacpp
+    ref: unsloth/Qwen3.6-35B-A3B-GGUF
+    hf_id: Qwen/Qwen3.6-35B-A3B
+    quantization: {format: gguf, quant: Q4_K_M}
+    methods: [sample, logprob]
+    size_tier: medium
+    latest_in_family: true
+
+  - alias: Qwen3.6-27B
+    family: qwen
+    generation: qwen3.6
+    release_date: "2026-04-21"
+    in_window: true
+    kind: instruct
+    params_total_b: 27
+    params_active_b: 27
+    backend: llamacpp
+    ref: unsloth/Qwen3.6-27B-GGUF
+    hf_id: Qwen/Qwen3.6-27B
+    quantization: {format: gguf, quant: Q4_K_M}
+    methods: [sample, logprob]
+    size_tier: medium
+    latest_in_family: true
+
+  # base variants — Qwen3.6 shipped no Base checkpoints, so the newest
+  # available base tier is Qwen3.5. Flagged so the write-up says so.
+  - alias: Qwen3.5-4B-Base
+    family: qwen
+    generation: qwen3.5
+    release_date: "2026-02-27"
+    in_window: true
+    kind: base
+    params_total_b: 4
+    params_active_b: 4
+    backend: hf
+    ref: Qwen/Qwen3.5-4B-Base
+    quantization: {format: hf, method: bnb-4bit}
+    methods: [logprob]
+    size_tier: small
+    enabled: false
+    base_of_latest: false
+    notes: Newest available Qwen base checkpoint; Qwen3.6 has no Base release.
+
+  - alias: Qwen3.5-9B-Base
+    family: qwen
+    generation: qwen3.5
+    release_date: "2026-02-26"
+    in_window: true
+    kind: base
+    params_total_b: 9
+    params_active_b: 9
+    backend: hf
+    ref: Qwen/Qwen3.5-9B-Base
+    quantization: {format: hf, method: bnb-4bit}
+    methods: [logprob]
+    size_tier: small
+    enabled: false
+    base_of_latest: false
+
+  - alias: Qwen3.5-35B-A3B-Base
+    family: qwen
+    generation: qwen3.5
+    release_date: "2026-02-24"
+    in_window: true
+    kind: base
+    params_total_b: 35
+    params_active_b: 3
+    backend: hf
+    ref: Qwen/Qwen3.5-35B-A3B-Base
+    quantization: {format: hf, method: bnb-4bit}
+    methods: [logprob]
+    size_tier: medium
+    enabled: false
+    base_of_latest: false
+    notes: >-
+      Pairs with Qwen3.5-35B-A3B (instruct) for the cleanest base-vs-instruct
+      contrast in the battery — same weights, one RLHF stage apart.
+
+
+  # =========================================================================
+  # CLAUDE — API (sampling only; Anthropic exposes no token logprobs)
+  # =========================================================================
+
+  - alias: Claude-Sonnet-4.5
+    family: claude
+    generation: claude-4.5
+    release_date: "2025-09-29"
+    in_window: true
+    kind: instruct
+    backend: anthropic
+    ref: claude-sonnet-4-5
+    methods: [sample]
+
+  - alias: Claude-Haiku-4.5
+    family: claude
+    generation: claude-4.5
+    release_date: "2025-10-15"
+    in_window: true
+    kind: instruct
+    backend: anthropic
+    ref: claude-haiku-4-5
+    methods: [sample]
+
+  - alias: Claude-Opus-4.5
+    family: claude
+    generation: claude-4.5
+    release_date: "2025-11-24"
+    in_window: true
+    kind: instruct
+    backend: anthropic
+    ref: claude-opus-4-5
+    methods: [sample]
+
+  - alias: Claude-Opus-4.6
+    family: claude
+    generation: claude-4.6
+    release_date: "2026-02-05"
+    in_window: true
+    kind: instruct
+    backend: anthropic
+    ref: claude-opus-4-6
+    methods: [sample]
+
+  - alias: Claude-Sonnet-4.6
+    family: claude
+    generation: claude-4.6
+    release_date: "2026-02-17"
+    in_window: true
+    kind: instruct
+    backend: anthropic
+    ref: claude-sonnet-4-6
+    methods: [sample]
+
+  - alias: Claude-Sonnet-5
+    family: claude
+    generation: claude-5
+    release_date: "2026-07-01"
+    date_verified: false
+    in_window: true
+    kind: instruct
+    backend: anthropic
+    ref: claude-sonnet-5
+    methods: [sample]
+
+  - alias: Claude-Opus-5
+    family: claude
+    generation: claude-5
+    release_date: "2026-07-24"
+    in_window: true
+    kind: instruct
+    backend: anthropic
+    ref: claude-opus-5
+    methods: [sample]
+    latest_in_family: true
+    notes: >-
+      Thinking is ON by default; disabling it is only legal at effort <= high.
+      Adapter passes thinking={"type":"disabled"} + effort=low for rating-only
+      so the rating is not a by-product of extended reasoning.
+
+
+  # =========================================================================
+  # GPT — API
+  # Model-ID strings follow OpenAI's current bare-name scheme. VERIFY each one
+  # against GET /v1/models before the main run; `date_verified: false` marks
+  # the ones whose release date still needs a citation.
+  # =========================================================================
+
+  - alias: GPT-5
+    family: gpt
+    generation: gpt-5
+    release_date: "2025-08-07"
+    in_window: true
+    kind: instruct
+    backend: openai
+    ref: gpt-5
+    methods: [sample, logprob]
+
+  - alias: GPT-5.4
+    family: gpt
+    generation: gpt-5.4
+    release_date: "2026-03-05"
+    in_window: true
+    kind: instruct
+    backend: openai
+    ref: gpt-5.4
+    methods: [sample, logprob]
+
+  - alias: GPT-5.4-mini
+    family: gpt
+    generation: gpt-5.4
+    release_date: "2026-03-17"
+    in_window: true
+    kind: instruct
+    backend: openai
+    ref: gpt-5.4-mini
+    methods: [sample, logprob]
+
+  # GPT-5.6 family (Sol / Terra / Luna), released 2026-07-09. Sol = flagship,
+  # Terra = mid (~2x cheaper than GPT-5.5). VERIFY the exact API model strings
+  # against GET /v1/models before the run.
+  - alias: GPT-5.6-Sol
+    family: gpt
+    generation: gpt-5.6
+    release_date: "2026-07-09"
+    in_window: true
+    kind: instruct
+    backend: openai
+    ref: gpt-5.6-sol
+    methods: [sample, logprob]
+    latest_in_family: true
+    notes: Flagship tier of the GPT-5.6 family.
+
+  - alias: GPT-5.6-Terra
+    family: gpt
+    generation: gpt-5.6
+    release_date: "2026-07-09"
+    in_window: true
+    kind: instruct
+    backend: openai
+    ref: gpt-5.6-terra
+    methods: [sample, logprob]
+    notes: Mid tier of the GPT-5.6 family; ~2x cheaper than GPT-5.5.
