@@ -285,8 +285,11 @@ Deliberately left out, with a guard rather than silent bad data:
 
 - [x] Phase 0 — pipeline runs end-to-end offline; parsing, refusal handling,
       resume, and both measurement paths verified through `MockAdapter`.
-- [ ] Phase 1 — verify the 5 unconfirmed release dates and the GPT API model
-      strings; pre-register factor levels, trials, and trimming rules.
-- [ ] Phase 2 — main run.
+- [ ] Phase 1 (open-source, before first run) — install the local deps; smoke-
+      test the **real** logprob path on one GGUF (coverage sane?); confirm
+      `--verify-thinking` says OK (not IGNORED) for the Qwen models; pre-register
+      factor levels, seeds, and trimming rules.
+- [ ] Phase 2 — main open-source run (13 models, logprob, ~3,965 primary cells).
 - [ ] Phase 3 — analysis (EFA/CFA, nomological checks, bias diagnostics).
-- [ ] Phase 4 — write-up within demonstrated boundaries; no consciousness claims.
+- [ ] Phase 4 — closed-source APIs (verify Claude-Sonnet-5 date + GPT-5.6/API
+      model strings against `/v1/models`), sampling + parity check, write-up.

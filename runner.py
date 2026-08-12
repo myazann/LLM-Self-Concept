@@ -400,11 +400,11 @@ def plan(cfg: ExperimentConfig, arm_name=None, model_filter=None) -> str:
     )
     api_cells = grand.get("openai", 0) + grand.get("anthropic", 0)
     local_cells = grand.get("llamacpp", 0) + grand.get("hf", 0)
-    footer = (
-        f"\nTOTAL {grand['total']:,} cells  "
-        f"({api_cells:,} billed API calls, {local_cells:,} local)\n"
-        f"Each API cell is one request. Sanity-check the bill before running."
-    )
+    footer = f"\nTOTAL {grand['total']:,} cells  ({api_cells:,} billed API calls, {local_cells:,} local)"
+    if api_cells:
+        footer += "\nEach API cell is one request. Sanity-check the bill before running."
+    else:
+        footer += "\nAll local (open-source) — no API spend; cost is compute + one-time GGUF downloads."
     return header + "\n" + "-" * len(header) + "\n" + "\n".join(lines) + footer
 
 

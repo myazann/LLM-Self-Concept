@@ -34,9 +34,10 @@ window:
   start: "2025-08-01"
   end: "2026-08-12"
   note: >-
-    Rolling ~12 months, month-aligned so openai/gpt-oss (2025-08-04) lands
-    inside it. google/gemma-3-270m-it (2025-07-30) falls just outside and is
-    represented by the Gemma anchor instead.
+    Rolling ~12 months. Gemma's in-window releases are all one generation
+    (Gemma 4), so Gemma 3 (2025-03-12) is carried as a pre-window generation
+    (in_window:false) to give Gemma a real before-point; it is still run by
+    default. No family uses the single-point `anchor` role any more.
 
 # --- defaults applied to every model unless overridden per-entry ------------
 defaults:

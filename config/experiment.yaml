@@ -42,8 +42,9 @@ robustness_arms:
     factor: reasoning_mode
     levels: [reason_then_rating]
     rationale: >-
-      Does exposed reasoning move the rating? Note Claude Fable/Mythos cannot
-      disable thinking, so they are excluded from this contrast.
+      Does exposed reasoning move the rating? SAMPLING-BASED: you cannot
+      logprob-score a reasoning trace, so this arm needs sample_baseline:true
+      and is inert under the logprob-only default. Deferred until later.
 
   response_format:
     factor: response_format
@@ -66,7 +67,7 @@ robustness_arms:
       Instruction-paraphrase sensitivity. Report only constructs stable across
       all three.
 
-# --- harmonized scale details (tested as robustness in the pilot) ----------
+# --- harmonized scale details ----------------------------------------------
 harmonized:
   n_points: 7
   include_midpoint: true    # forced (false) vs unforced (true) choice
@@ -103,4 +104,4 @@ pilot:
   models: [Gemma4-12B]
   scales: [RSES_1965_LLM_ADAPT]
   framings: [first_person_ack, first_person_bare, third_person_assistant]
-  n_samples: 5
+  n_trials: 5    # logprob seeds (or samples, if sample_baseline is on) per cell

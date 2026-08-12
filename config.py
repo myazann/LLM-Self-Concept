@@ -51,7 +51,7 @@ class ExperimentConfig:
     harmonized_points: int = 7
     include_midpoint: bool = True
 
-    sample_baseline: bool = True
+    sample_baseline: bool = False   # open-source/logprob-first default; experiment.yaml is authoritative
     logprob_where_available: bool = True
     n_samples_override: Optional[int] = None
     n_seeds_override: Optional[int] = None
@@ -101,12 +101,15 @@ class ExperimentConfig:
             levels=tuple(p.get("framings", (self.framing,))),
             rationale="Phase 0: verify parsing, refusal handling, and framing plumbing.",
         )
+        # `n_trials` sets both paths so the pilot is small regardless of method
+        # (logprob seeds by default; samples if sample_baseline is on).
+        n_trials = p.get("n_trials", p.get("n_samples", 5))
         return replace(
             self,
             scope=scope,
             arms={**self.arms, "pilot_framing": pilot_arm},
-            n_samples_override=p.get("n_samples", 5),
-            n_seeds_override=p.get("n_samples", 5),
+            n_samples_override=n_trials,
+            n_seeds_override=n_trials,
             out_path="pilot.jsonl",
             pinned_models=_tuple_or_none(p.get("models")),
         )
