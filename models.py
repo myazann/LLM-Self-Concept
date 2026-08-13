@@ -110,6 +110,24 @@ def _softmax_over(logprobs: dict) -> dict:
     return {v: e / total for v, e in exps.items()} if total else {}
 
 
+def _distribution_and_coverage(logprobs: dict):
+    """`(distribution, coverage)` from raw option-token logprobs.
+
+    `coverage` is the raw probability mass the option tokens carried at the
+    answer position *before* renormalizing over just the options — the design's
+    QC signal: coverage near 1 means the model's next-token mass really was on
+    the rating digits; low coverage means it wanted to emit something else (a
+    word, a space, punctuation), so the rating is suspect even though a modal
+    option exists. `distribution` is that mass renormalized to sum to 1 over the
+    options, so expected value and modal rating stay well-defined when coverage
+    < 1. `option_values` outside the returned top-k contribute 0 to coverage.
+    """
+    if not logprobs:
+        return {}, 0.0
+    coverage = min(1.0, sum(math.exp(lp) for lp in logprobs.values()))
+    return _softmax_over(logprobs), coverage
+
+
 def _retry(fn, attempts: int = 4, base: float = 1.5):
     """Exponential backoff. Same shape as the MW repo's retry loops, minus the
     hard tenacity dependency."""
@@ -155,7 +173,10 @@ class ModelAdapter(ABC):
     def sample_item(self, prompt, n: int, plan: "ReasoningPlan | None" = None) -> list:
         raise NotImplementedError(f"{type(self).__name__} has no SAMPLE path.")
 
-    def score_item(self, prompt, option_values, plan: "ReasoningPlan | None" = None) -> dict:
+    def score_item(self, prompt, option_values, plan: "ReasoningPlan | None" = None):
+        """Return (distribution, coverage): the renormalized option distribution
+        and the raw option-token mass at the answer position. See
+        `_distribution_and_coverage`."""
         raise NotImplementedError(f"{type(self).__name__} has no LOGPROB path.")
 
     def close(self) -> None:
@@ -184,8 +205,8 @@ class MockAdapter(ModelAdapter):
         total = sum(weights)
         return {v: w / total for v, w in zip(values, weights)}
 
-    def score_item(self, prompt, option_values, plan=None) -> dict:
-        return self._dist(prompt, option_values)
+    def score_item(self, prompt, option_values, plan=None):
+        return self._dist(prompt, option_values), 1.0   # mock: full coverage
 
     def sample_item(self, prompt, n: int, plan=None) -> list:
         import random
@@ -299,7 +320,10 @@ class LlamaCppAdapter(ModelAdapter):
             "model_path": str(model_path),
             "n_ctx": runtime.get("n_ctx", 4096),
             "n_gpu_layers": runtime.get("n_gpu_layers", -1),
-            "logits_all": False,
+            # llama-cpp-python only returns top-k `logprobs` (which score_item's
+            # option-token distribution depends on) when logits are kept for the
+            # scored position. Required for the logprob measurement path.
+            "logits_all": runtime.get("logits_all", True),
             "verbose": False,
         }
         threads = runtime.get("n_threads")
@@ -372,15 +396,31 @@ class LlamaCppAdapter(ModelAdapter):
             return self._completion_text(prompt)
         return self.renderer.render(prompt.system, prompt.user, enable_thinking)
 
+    def _prompt_tokens(self, prompt, enable_thinking: Optional[bool]) -> list:
+        """Tokenize the rendered prompt for create_completion.
+
+        When we applied the model's chat template ourselves, that string ALREADY
+        carries the model's leading special tokens (Gemma's `<bos>`, Qwen's
+        `<|im_start|>`), so we tokenize with `add_bos=False` — otherwise
+        llama.cpp prepends a SECOND `<bos>` ("duplicate leading <bos>" warning),
+        which shifts every position and degrades the logprob readout. The
+        base-model completion path has no template, so it still needs a bos.
+        """
+        text = self._render(prompt, enable_thinking)
+        templated = not (prompt.is_completion or not self.renderer.available)
+        return self.llm.tokenize(
+            text.encode("utf-8"), add_bos=not templated, special=templated
+        )
+
     # -- SAMPLE ------------------------------------------------------------
     def sample_item(self, prompt, n: int, plan=None) -> list:
         plan = plan or self.reasoning_plan(want_thinking=False)
         enable = plan.kwargs.get("enable_thinking")   # None for no-think models
-        text = self._render(prompt, enable)
+        tokens = self._prompt_tokens(prompt, enable)
         out = []
         for _ in range(n):
             resp = self.llm.create_completion(
-                prompt=text,
+                prompt=tokens,
                 temperature=self.spec.temperature,
                 max_tokens=plan.max_tokens,
             )
@@ -405,9 +445,9 @@ class LlamaCppAdapter(ModelAdapter):
         reasoning_mode — you cannot logprob-score a reasoning trace. Options
         outside the returned top-k get 0 mass, reported via `coverage`.
         """
-        text = self._render(prompt, enable_thinking=False)
+        tokens = self._prompt_tokens(prompt, enable_thinking=False)
         resp = self.llm.create_completion(
-            prompt=text,
+            prompt=tokens,
             max_tokens=1,
             temperature=0.0,
             logprobs=100,
@@ -423,7 +463,7 @@ class LlamaCppAdapter(ModelAdapter):
             if key in wanted:
                 value = wanted[key]
                 found[value] = max(found.get(value, -math.inf), logprob)
-        return _softmax_over(found)
+        return _distribution_and_coverage(found)
 
     def close(self) -> None:
         self.llm = None
@@ -559,7 +599,7 @@ class HFAdapter(ModelAdapter):
                     best = max(best, float(logprobs[ids[0]]))
             if best > -math.inf:
                 found[value] = best
-        return _softmax_over(found)
+        return _distribution_and_coverage(found)
 
     def close(self) -> None:
         self.model = None
@@ -650,7 +690,7 @@ class OpenAIAdapter(ModelAdapter):
             if key in wanted:
                 value = wanted[key]
                 found[value] = max(found.get(value, -math.inf), alt.logprob)
-        return _softmax_over(found)
+        return _distribution_and_coverage(found)
 
 
 # ---------------------------------------------------------------------------

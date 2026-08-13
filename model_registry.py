@@ -196,6 +196,30 @@ def split_hf_gguf_ref(ref: str) -> tuple[str, Optional[str]]:
 _AUX_GGUF = re.compile(r"(^|/)(mmproj|mtp-|draft-)|(^|/)(MTP|mmproj)/", re.IGNORECASE)
 
 
+def _cached_gguf_files(repo_id: str) -> list:
+    """`.gguf` filenames already in the local HF cache for `repo_id`.
+
+    Offline fallback for `resolve_gguf_file`: once a model is downloaded, a
+    resumed or re-run experiment can resolve its quant file with no network, so
+    a flaky connection can't kill a run whose weights are already on disk.
+    Newest snapshot first, so a re-downloaded file wins.
+    """
+    from pathlib import Path
+
+    try:
+        from huggingface_hub.constants import HF_HUB_CACHE
+    except ImportError:
+        return []
+    snaps = Path(HF_HUB_CACHE) / f"models--{repo_id.replace('/', '--')}" / "snapshots"
+    if not snaps.is_dir():
+        return []
+    seen = {}
+    for snap in sorted(snaps.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+        for f in snap.rglob("*.gguf"):
+            seen.setdefault(str(f.relative_to(snap)), True)
+    return list(seen)
+
+
 def resolve_gguf_file(repo_id: str, quant: str, prefer_dynamic: bool = False) -> str:
     """Find the .gguf file in `repo_id` matching the quant tag.
 
@@ -223,9 +247,19 @@ def resolve_gguf_file(repo_id: str, quant: str, prefer_dynamic: bool = False) ->
         ) from err
 
     token = os.environ.get("HF_TOKEN")
+    try:
+        listing = list_repo_files(repo_id, token=token)
+    except Exception as err:  # offline, no network, rate-limited, private repo...
+        listing = _cached_gguf_files(repo_id)
+        if not listing:
+            raise RuntimeError(
+                f"Could not list {repo_id} ({type(err).__name__}: {err}) and no "
+                ".gguf is cached locally. Connect to the network for the first "
+                "download, or pin the file in models.yaml via `gguf_file:`."
+            ) from err
     files = [
         f
-        for f in list_repo_files(repo_id, token=token)
+        for f in listing
         if f.lower().endswith(".gguf") and not _AUX_GGUF.search(f)
     ]
     if not files:

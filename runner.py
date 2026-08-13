@@ -16,10 +16,13 @@ import argparse
 import datetime as dt
 import hashlib
 import itertools
+import logging
 import sys
+import time
 import uuid
 from collections import Counter
 
+import obs
 import prompts as prompts_mod
 from config import ExperimentConfig, load_config
 from model_registry import ModelSpec, load_registry
@@ -35,6 +38,14 @@ from schema import (
     make_cell_key,
     write_jsonl,
 )
+
+
+# How many records to buffer before an fsync'd append (bounds worst-case loss
+# on a hard kill) and how often to emit a heartbeat / refresh the status file.
+BATCH = 25
+# Logprob mass on valid option tokens below this is flagged: the model wanted to
+# say something other than a bare number. Data, not an error — but worth seeing.
+LOW_COVERAGE = 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +171,7 @@ def _render(cell, cfg):
 
 
 def _record(cell, cfg, prompt, rendered_scale, seed, *, raw, parsed, dist,
-            refusal, parse_failed, plan=None, notes=""):
+            refusal, parse_failed, plan=None, notes="", modal=None, coverage=None):
     spec, scale, item = cell["spec"], cell["scale"], cell["item"]
     prov = spec.provenance()
     return ResponseRecord(
@@ -195,12 +206,17 @@ def _record(cell, cfg, prompt, rendered_scale, seed, *, raw, parsed, dist,
         parse_failed=parse_failed,
         temperature=spec.temperature,
         prompt_hash=prompt.prompt_hash,
+        prompt_system=prompt.system,
+        prompt_user=prompt.user,
+        modal_rating=modal,
+        option_mass_coverage=coverage,
         notes=notes,
     )
 
 
 def run(cfg: ExperimentConfig, *, dry_run=False, arm_name=None, model_filter=None,
-        limit=None, out_path=None) -> dict:
+        limit=None, out_path=None, logger=None) -> dict:
+    log = logger or obs.get_logger()
     registry = load_registry()
     battery = load_battery()
     out = out_path or cfg.out_path
@@ -226,81 +242,202 @@ def run(cfg: ExperimentConfig, *, dry_run=False, arm_name=None, model_filter=Non
         raise SystemExit("No models selected. Widen `scope` in config/experiment.yaml.")
 
     done = completed_cells(out) if cfg.resume else set()
+
+    # Expand the grid once (pure — no calls) and split each model into
+    # planned-vs-remaining, so resume is *visible*: we can say exactly how many
+    # cells are already on disk before loading a single weight.
+    planned, pending, remaining, resumable = {}, {}, {}, 0
+    for spec in specs:
+        all_cells = list(expand_cells([spec], battery, cfg, arm_name))
+        planned[spec.alias] = len(all_cells)
+        todo = [c for c in all_cells if cell_key_of(c) not in done]
+        pending[spec.alias] = len(todo)          # still-to-do, before any --limit cap
+        resumable += len(all_cells) - len(todo)
+        if limit:
+            todo = todo[:limit]
+        remaining[spec.alias] = todo
+
+    total_planned = sum(planned.values())
+    already = resumable
+    to_run = sum(len(v) for v in remaining.values())
+
+    # Resume banner + config-drift guard.
+    if cfg.resume and already:
+        log.info("resuming %s: %d / %d cells already done", out, already, total_planned)
+    prev = obs.read_status(out)
+    cfg_hash = obs.config_hash(cfg, arm_name)
+    if prev and prev.get("config_hash") not in (None, cfg_hash):
+        log.warning("config_hash changed since the last run on this file "
+                    "(%s -> %s) — the design differs, so resumed cell-keys may "
+                    "not line up. Confirm this is intended.",
+                    prev.get("config_hash"), cfg_hash)
+    log.info("plan: %d model(s) | %d cell(s) to run now%s | arm=%s | out=%s",
+             len(specs), to_run, f" (limit {limit}/model)" if limit else "",
+             arm_name or "primary", out)
+
+    log_path = next((h.baseFilename for h in log.handlers
+                     if isinstance(h, logging.FileHandler)), "")
+    status = obs.StatusWriter(out, run_id=obs.run_stamp(), arm_name=arm_name,
+                              cfg_hash=cfg_hash, log_path=log_path, planned=planned)
+    status.set_totals(already_done=already)
+    killer = obs.GracefulKiller(log)
     stats = Counter()
+    run_started = time.monotonic()
+
+    def heartbeat(spec, cells, i):
+        elapsed = time.monotonic() - run_started
+        written = stats["written"]
+        rate = written / elapsed if elapsed > 0 else 0.0
+        eta = (to_run - written) / rate if rate > 0 else None
+        log.info("[%s] %d/%d | %.2f cells/s | ETA %s | "
+                 "err=%d refus=%d pfail=%d lowcov=%d",
+                 spec.alias, i, len(cells), rate, obs.fmt_duration(eta),
+                 stats["errors"], stats["refusals"], stats["parse_failures"],
+                 stats["low_coverage"])
+        status.state["current_model"] = spec.alias
+        status.state["rate_cells_per_s"] = round(rate, 3)
+        status.state["eta_seconds"] = int(eta) if eta else None
+        status.state["models"][spec.alias]["done"] = (planned[spec.alias] - pending[spec.alias]) + i
+        status.state["totals"].update(
+            written_this_run=written, refusals=stats["refusals"],
+            parse_failures=stats["parse_failures"], errors=stats["errors"],
+            low_coverage=stats["low_coverage"])
+        status.flush()
 
     # Group by model so each set of weights is loaded exactly once.
     for spec in specs:
-        cells = [c for c in expand_cells([spec], battery, cfg, arm_name)
-                 if cell_key_of(c) not in done]
-        if limit:
-            cells = cells[:limit]
+        cells = remaining[spec.alias]
+        done_before = planned[spec.alias] - pending[spec.alias]  # already on disk
         if not cells:
-            print(f"[{spec.alias}] nothing to do (all cells already in {out})")
+            log.info("[%s] nothing to do (%d/%d cells already on disk)",
+                     spec.alias, done_before, planned[spec.alias])
+            status.set_model(spec.alias,
+                             state="done" if pending[spec.alias] == 0 else "partial",
+                             done=done_before)
             continue
 
         if not dry_run and spec.quantization.format == "gguf":
             spec = registry.with_resolved_quant(spec)
             for c in cells:
                 c["spec"] = spec
-            print(f"[{spec.alias}] quant file: {spec.quantization.resolved_file}")
+            log.info("[%s] quant file: %s", spec.alias, spec.quantization.resolved_file)
 
-        print(f"[{spec.alias}] {len(cells)} cells "
-              f"({spec.backend}, {spec.quantization.label})")
+        log.info("[%s] %d cell(s) to run  (%s, %s)",
+                 spec.alias, len(cells), spec.backend, spec.quantization.label)
+        status.set_model(spec.alias, state="running")
+        status.update(current_model=spec.alias)
 
-        with build_adapter(spec, dry_run=dry_run) as adapter:
-            batch = []
-            for i, cell in enumerate(cells, 1):
-                prompt, rendered_scale, seed = _render(cell, cfg)
-                # Assert the reasoning state per the reasoning_mode factor; the
-                # adapter never relies on a model's default.
-                want_thinking = (
-                    cell["reasoning_mode"] == ReasoningMode.REASON_THEN_RATING.value
-                )
-                plan = adapter.reasoning_plan(want_thinking)
-                try:
-                    if cell["method"] == Method.LOGPROB.value:
-                        dist = adapter.score_item(prompt, prompt.option_values, plan=plan)
-                        expected = (
-                            sum(v * p for v, p in dist.items()) if dist else None
-                        )
-                        coverage = sum(dist.values()) if dist else 0.0
-                        rec = _record(
-                            cell, cfg, prompt, rendered_scale, seed,
-                            raw="<logprob>", parsed=expected,
-                            dist={str(k): v for k, v in dist.items()},
-                            refusal=False, parse_failed=not dist, plan=plan,
-                            notes=f"option_mass_coverage={coverage:.4f}",
-                        )
-                    else:
-                        raw = adapter.sample_item(prompt, n=1, plan=plan)[0]
-                        rating, refusal, failed = parse_rating(raw, prompt.option_values)
-                        rec = _record(
-                            cell, cfg, prompt, rendered_scale, seed,
-                            raw=raw, parsed=rating, dist={},
-                            refusal=refusal, parse_failed=failed, plan=plan,
-                        )
-                except Exception as err:  # noqa: BLE001 — one bad cell must not kill the run
-                    stats["errors"] += 1
-                    rec = _record(
-                        cell, cfg, prompt, rendered_scale, seed,
-                        raw="", parsed=None, dist={}, refusal=False,
-                        parse_failed=True, plan=plan,
-                        notes=f"error: {type(err).__name__}: {err}",
+        model_started = time.monotonic()
+        m = Counter()          # per-model tallies, for the summary line
+        cov_sum = cov_n = 0
+        first_error_logged = False
+
+        try:
+            with build_adapter(spec, dry_run=dry_run) as adapter:
+                batch = []
+                for i, cell in enumerate(cells, 1):
+                    if killer.stop:
+                        break
+                    prompt, rendered_scale, seed = _render(cell, cfg)
+                    # Assert the reasoning state per the reasoning_mode factor;
+                    # the adapter never relies on a model's default.
+                    want_thinking = (
+                        cell["reasoning_mode"] == ReasoningMode.REASON_THEN_RATING.value
                     )
+                    plan = adapter.reasoning_plan(want_thinking)
+                    try:
+                        if cell["method"] == Method.LOGPROB.value:
+                            dist, coverage = adapter.score_item(
+                                prompt, prompt.option_values, plan=plan)
+                            expected = (
+                                sum(v * p for v, p in dist.items()) if dist else None
+                            )
+                            modal = max(dist, key=dist.get) if dist else None
+                            cov_sum += coverage
+                            cov_n += 1
+                            if coverage < LOW_COVERAGE:
+                                stats["low_coverage"] += 1
+                                m["low_coverage"] += 1
+                            rec = _record(
+                                cell, cfg, prompt, rendered_scale, seed,
+                                raw="<logprob>", parsed=expected, modal=modal,
+                                coverage=coverage,
+                                dist={str(k): v for k, v in dist.items()},
+                                refusal=False, parse_failed=not dist, plan=plan,
+                            )
+                        else:
+                            raw = adapter.sample_item(prompt, n=1, plan=plan)[0]
+                            rating, refusal, failed = parse_rating(raw, prompt.option_values)
+                            rec = _record(
+                                cell, cfg, prompt, rendered_scale, seed,
+                                raw=raw, parsed=rating, modal=rating, dist={},
+                                refusal=refusal, parse_failed=failed, plan=plan,
+                            )
+                    except Exception as err:  # noqa: BLE001 — one bad cell must not kill the run
+                        stats["errors"] += 1
+                        m["errors"] += 1
+                        if not first_error_logged:  # full traceback once per model
+                            log.exception("[%s] first error, at item %s (%s)",
+                                          spec.alias, cell["item"].item_id, cell["method"])
+                            first_error_logged = True
+                        else:
+                            log.error("[%s] error at item %s: %s: %s", spec.alias,
+                                      cell["item"].item_id, type(err).__name__, err)
+                        rec = _record(
+                            cell, cfg, prompt, rendered_scale, seed,
+                            raw="", parsed=None, dist={}, refusal=False,
+                            parse_failed=True, plan=plan,
+                            notes=f"error: {type(err).__name__}: {err}",
+                        )
 
-                batch.append(rec)
-                stats["written"] += 1
-                stats["refusals"] += int(rec.refusal_flag)
-                stats["parse_failures"] += int(rec.parse_failed)
+                    batch.append(rec)
+                    stats["written"] += 1
+                    m["written"] += 1
+                    stats["refusals"] += int(rec.refusal_flag)
+                    m["refusals"] += int(rec.refusal_flag)
+                    stats["parse_failures"] += int(rec.parse_failed)
+                    m["parse_failures"] += int(rec.parse_failed)
 
-                if len(batch) >= 25:
+                    if len(batch) >= BATCH:
+                        write_jsonl(batch, out)
+                        batch = []
+                        heartbeat(spec, cells, i)
+                if batch:
                     write_jsonl(batch, out)
-                    batch = []
-                    print(f"  {i}/{len(cells)}", end="\r", flush=True)
-            if batch:
-                write_jsonl(batch, out)
-        print(f"  {len(cells)}/{len(cells)} done")
+        except NotImplementedError:
+            raise  # design guard (e.g. full_battery) — fail loudly, don't skip
+        except Exception:  # noqa: BLE001 — a model that won't load must not kill the others
+            log.exception("[%s] fatal error (model load / adapter) — skipping", spec.alias)
+            status.set_model(spec.alias, state="error", done=done_before + m["written"])
+            stats.update({"errors": m["errors"]})
+            if killer.stop:
+                break
+            continue
 
+        elapsed = time.monotonic() - model_started
+        mean_cov = (cov_sum / cov_n) if cov_n else None
+        cov_str = f" | mean coverage={mean_cov:.3f}" if mean_cov is not None else ""
+        interrupted = killer.stop
+        complete = (not interrupted) and (m["written"] >= pending[spec.alias])
+        state = "stopped" if interrupted else ("done" if complete else "partial")
+        log.info("[%s] %s: %d cell(s) in %s%s | err=%d refus=%d pfail=%d lowcov=%d",
+                 spec.alias, state, m["written"], obs.fmt_duration(elapsed), cov_str,
+                 m["errors"], m["refusals"], m["parse_failures"], m["low_coverage"])
+        status.set_model(
+            spec.alias,
+            state="interrupted" if interrupted else ("done" if complete else "partial"),
+            done=done_before + m["written"],
+            mean_coverage=round(mean_cov, 4) if mean_cov is not None else None,
+        )
+        heartbeat(spec, cells, m["written"])
+
+        if interrupted:
+            log.warning("shutdown signal — stopping after %s; %d cell(s) still "
+                        "pending. Re-run the same command to resume.",
+                        spec.alias, to_run - stats["written"])
+            break
+
+    status.update(state="interrupted" if killer.stop else "done", current_model=None)
     return dict(stats)
 
 
@@ -423,6 +560,9 @@ def main(argv=None) -> int:
     ap.add_argument("--limit", type=int, default=None, help="Cap cells per model (smoke test).")
     ap.add_argument("--out", default=None, help="Output JSONL path.")
     ap.add_argument("--no-resume", action="store_true", help="Ignore existing output rows.")
+    ap.add_argument("--status", action="store_true",
+                    help="Print progress for --out (or the configured output) and exit.")
+    ap.add_argument("--verbose", action="store_true", help="Debug-level console logging.")
     args = ap.parse_args(argv)
 
     cfg = load_config()
@@ -431,6 +571,13 @@ def main(argv=None) -> int:
         args.arm = args.arm or "pilot_framing"
     if args.no_resume:
         cfg = type(cfg)(**{**cfg.__dict__, "resume": False})
+
+    out = args.out or cfg.out_path
+
+    # Inspection paths — no logging setup, no calls, stay instant/offline.
+    if args.status:
+        obs.print_status(out)
+        return 0
 
     # An explicit --models always wins; otherwise a pilot uses its pinned list.
     model_filter = args.models or (list(cfg.pinned_models) if cfg.pinned_models else None)
@@ -443,6 +590,10 @@ def main(argv=None) -> int:
         print(plan(cfg, args.arm, model_filter))
         return 0
 
+    logger, log_path = obs.setup_logging(args.arm, verbose=args.verbose)
+    logger.info("run start | out=%s | resume=%s | dry_run=%s | log=%s",
+                out, cfg.resume, args.dry_run, log_path)
+
     arms = [args.arm]
     if args.arm == "all":
         arms = [None] + sorted(cfg.arms)
@@ -450,18 +601,15 @@ def main(argv=None) -> int:
     totals = Counter()
     for arm in arms:
         if arm:
-            print(f"\n=== arm: {arm} ===")
+            logger.info("=== arm: %s ===", arm)
         stats = run(cfg, dry_run=args.dry_run, arm_name=arm,
-                    model_filter=model_filter, limit=args.limit, out_path=args.out)
+                    model_filter=model_filter, limit=args.limit, out_path=out,
+                    logger=logger)
         totals.update(stats)
 
-    out = args.out or cfg.out_path
-    print(
-        f"\nwrote {totals['written']:,} records to {out}   "
-        f"refusals={totals['refusals']:,}  "
-        f"parse_failures={totals['parse_failures']:,}  "
-        f"errors={totals['errors']:,}"
-    )
+    logger.info("ALL DONE | wrote %s record(s) to %s | refusals=%s parse_failures=%s errors=%s",
+                f"{totals['written']:,}", out, f"{totals['refusals']:,}",
+                f"{totals['parse_failures']:,}", f"{totals['errors']:,}")
     return 0
 
 

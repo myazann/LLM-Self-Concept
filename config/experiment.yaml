@@ -1,13 +1,15 @@
 ﻿# ---------------------------------------------------------------------------
 # Experiment configuration.
 #
-# The design is FRACTIONAL, not factorial (plan §3): the main run fixes every
-# factor at its primary level and varies ONE robustness factor at a time. The
-# full crossing is for the pilot only.
+# The main run is a PARTIAL FACTORIAL: it fully crosses the two factors the
+# literature says move results most — framing x instruction paraphrase (plan
+# §2.6/§2.8) — while pinning reasoning / format / context, and uses LOGPROB
+# only. Each remaining factor is then swept once as a robustness ARM, isolated
+# at the primary framing/paraphrase.
 #
-#   cells(primary)   = models x items x 1 framing x 1 reasoning x 1 format
-#                      x 1 context x 1 paraphrase x trials
-#   cells(robustness)= primary + one factor swept at a time
+#   cells(main)      = models x items x framings x paraphrases x trials
+#                      x 1 reasoning x 1 format x 1 context   (logprob)
+#   cells(robustness)= main-reference-cell + one factor swept at a time
 #
 # `python runner.py --plan` prints the cell count for any arm before you spend
 # anything on it.
@@ -19,24 +21,30 @@ output:
   path: results.jsonl
   resume: true         # skip cells already present in the output file
 
-# --- primary levels: everything else is held here during the main run ------
+# --- pinned levels: held constant during the main run ----------------------
+# These are also the single reference level a robustness arm isolates against.
 primary:
-  framing: first_person_ack
+  framing: first_person_ack   # reference framing when an arm isolates another factor
   reasoning_mode: rating_only
   response_format: harmonized_7
   item_context: isolated
-  paraphrase_id: p0          # p0 = the researcher's own instruction from the battery JSON
+  paraphrase_id: p0           # p0 = the researcher's own instruction from the battery JSON
 
-# --- robustness arms: each sweeps ONE factor off its primary level ----------
-# Enable individually with `runner.py --arm <name>`; `--arm all` runs each in turn.
+# --- core crossed factors: the main run crosses these two FULLY -------------
+# Framing and instruction paraphrase move results most (Röttger; Dominguez-
+# Olmedo; Argyle), so the main run crosses them for variance decomposition
+# instead of sweeping them one at a time. This makes the main run
+# framings (3) x paraphrases (3) = 9x a single-cell primary.
+core_crossed:
+  framings: [first_person_ack, first_person_bare, third_person_assistant]
+  paraphrase_ids: [p0, p1, p2]
+
+# --- robustness arms: each sweeps ONE pinned factor off its level -----------
+# Enable individually with `runner.py --arm <name>`; `--arm all` runs each in
+# turn. Arms are isolated at the primary framing/paraphrase (first_person_ack,
+# p0) to stay cheap; framing and paraphrase are NOT arms — they are crossed in
+# the main run above.
 robustness_arms:
-
-  framing:
-    factor: framing
-    levels: [first_person_bare, third_person_assistant]
-    rationale: >-
-      Bounds the disclaimer effect (bare "I") and the self-vs-prototype gap
-      (third person). These are different constructs — never average across them.
 
   reasoning:
     factor: reasoning_mode
@@ -59,13 +67,6 @@ robustness_arms:
     rationale: >-
       The Salecha et al. evaluation-awareness effect: does putting the whole
       scale in one context shift responses relative to isolated items?
-
-  paraphrase:
-    factor: paraphrase_id
-    levels: [p1, p2]
-    rationale: >-
-      Instruction-paraphrase sensitivity. Report only constructs stable across
-      all three.
 
 # --- harmonized scale details ----------------------------------------------
 harmonized:

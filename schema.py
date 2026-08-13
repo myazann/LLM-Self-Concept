@@ -107,6 +107,14 @@ class ResponseRecord:
     # -- reproducibility ---------------------------------------------------
     temperature: float
     prompt_hash: str
+    # Full rendered prompt, stored so any row is auditable without re-running
+    # the model. `prompt_system` is the framing block; `prompt_user` is the
+    # instruction + item + options + answer spec actually shown.
+    prompt_system: str = ""
+    prompt_user: str = ""
+    # -- observation, part 2 (defaulted, kept here for dataclass field order) --
+    modal_rating: Optional[float] = None          # argmax option: modal rating
+    option_mass_coverage: Optional[float] = None  # logprob QC: raw option mass
     notes: str = ""
 
     def to_json(self) -> str:
@@ -187,8 +195,15 @@ def read_jsonl(path: str) -> list:
     return out
 
 
-def completed_cells(path: str) -> set:
-    """Cell keys already present in `path` — drives "skip if already done".
+def completed_cells(path: str, retry_errors: bool = True) -> set:
+    """Cell keys already satisfied in `path` — drives "skip if already done".
+
+    A cell counts as done when it has at least one *successful* record. With
+    `retry_errors=True` (default), rows whose `notes` start with "error:" — the
+    infrastructure failures the runner writes when a cell raised (OOM, a
+    transient backend error) — do NOT count, so those cells are re-attempted on
+    the next run instead of being permanently skipped. A genuine non-numeric
+    answer or refusal is a real observation and still counts as done.
 
     Tolerates a truncated final line (a run killed mid-write) and rows written
     by an older schema version, so resume never dies on a partial file.
@@ -205,6 +220,8 @@ def completed_cells(path: str) -> set:
                 row = json.loads(line)
             except json.JSONDecodeError:
                 continue  # truncated last line from an interrupted run
+            if retry_errors and str(row.get("notes", "")).startswith("error:"):
+                continue  # infra error — leave this cell to be retried
             try:
                 done.add(
                     make_cell_key(

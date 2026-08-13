@@ -39,12 +39,18 @@ class ExperimentConfig:
     out_path: str = "results.jsonl"
     resume: bool = True
 
-    # primary levels
+    # primary levels — the single reference level for each factor, used when a
+    # robustness ARM isolates a different factor (and by the pilot).
     framing: str = "first_person_ack"
     reasoning_mode: str = "rating_only"
     response_format: str = "harmonized_7"
     item_context: str = "isolated"
     paraphrase_id: str = "p0"
+
+    # Core crossed factors: the MAIN run fully crosses framing × paraphrase
+    # (variance decomposition — plan §2.6/§2.8), pinning everything else.
+    framings: tuple = ("first_person_ack", "first_person_bare", "third_person_assistant")
+    paraphrase_ids: tuple = ("p0", "p1", "p2")
 
     arms: dict = field(default_factory=dict)
 
@@ -72,9 +78,19 @@ class ExperimentConfig:
     def levels_for(self, arm_name: Optional[str]) -> dict:
         """Factor levels to expand for a run.
 
-        Primary run: every factor pinned to one level. With an arm: that one
-        factor takes the arm's levels, everything else stays pinned.
+        MAIN run (arm_name is None): fully cross the core factors framing ×
+        paraphrase, pinning reasoning / format / context / method. With an ARM:
+        isolate that one factor at the *primary* framing/paraphrase, so an arm
+        stays a cheap, clean one-factor probe against the pinned reference cell.
         """
+        if arm_name is None:
+            return {
+                "framing": list(self.framings),
+                "reasoning_mode": [self.reasoning_mode],
+                "response_format": [self.response_format],
+                "item_context": [self.item_context],
+                "paraphrase_id": list(self.paraphrase_ids),
+            }
         levels = {
             "framing": [self.framing],
             "reasoning_mode": [self.reasoning_mode],
@@ -82,9 +98,8 @@ class ExperimentConfig:
             "item_context": [self.item_context],
             "paraphrase_id": [self.paraphrase_id],
         }
-        if arm_name:
-            arm = self.arm(arm_name)
-            levels[arm.factor] = list(arm.levels)
+        arm = self.arm(arm_name)
+        levels[arm.factor] = list(arm.levels)
         return levels
 
     def as_pilot(self) -> "ExperimentConfig":
@@ -124,6 +139,7 @@ def load_config(path: Path | str = CONFIG_PATH) -> ExperimentConfig:
         doc = yaml.safe_load(f)
 
     primary = doc.get("primary", {})
+    core = doc.get("core_crossed", {}) or {}
     output = doc.get("output", {})
     harmonized = doc.get("harmonized", {})
     trials = doc.get("trials", {})
@@ -147,6 +163,8 @@ def load_config(path: Path | str = CONFIG_PATH) -> ExperimentConfig:
         response_format=primary.get("response_format", "harmonized_7"),
         item_context=primary.get("item_context", "isolated"),
         paraphrase_id=primary.get("paraphrase_id", "p0"),
+        framings=_tuple_or_none(core.get("framings")) or (primary.get("framing", "first_person_ack"),),
+        paraphrase_ids=_tuple_or_none(core.get("paraphrase_ids")) or (primary.get("paraphrase_id", "p0"),),
         arms=arms,
         harmonized_points=int(harmonized.get("n_points", 7)),
         include_midpoint=bool(harmonized.get("include_midpoint", True)),

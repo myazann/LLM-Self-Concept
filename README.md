@@ -187,16 +187,20 @@ cannot be standardized (Claude Fable/Mythos — thinking always on) are
 
 ## Design
 
-Fractional, not factorial: the main run pins every factor to its primary level
-and sweeps one robustness arm at a time.
+Partial factorial: the main run **fully crosses framing × instruction
+paraphrase** (the two factors the literature says move results most — plan
+§2.6/§2.8), pinning reasoning/format/context and using logprob only. Each
+remaining factor is then swept once as a robustness arm, isolated at the
+primary framing/paraphrase.
 
 ```bash
-python runner.py --arm framing          # bare "I" and third-person
-python runner.py --arm all              # every arm in turn
+python runner.py                        # main run: 3 framings × 3 paraphrases
+python runner.py --arm all              # every robustness arm in turn
 ```
 
-Arms: `framing`, `reasoning`, `response_format`, `item_context`, `paraphrase`.
-Each declares its rationale in `config/experiment.yaml`.
+Arms: `reasoning`, `response_format`, `item_context`. (Framing and paraphrase
+are no longer arms — they are crossed in the main run.) Each declares its
+rationale in `config/experiment.yaml`.
 
 Two notes for the open-source/logprob default: the **`reasoning` arm is
 sampling-based** (you can't logprob-score a reasoning trace), so it's inert
@@ -205,10 +209,9 @@ reason-then-rate condition later; and **`item_context` (full-battery) is not
 runnable yet** (see "Not implemented").
 
 **What multiplies the run** (all factors are `× cells`): models (13) × items
-(61) × framings (1, or 3 with the framing arm) × formats (1, or 2 with the
-format arm) × paraphrases (1, or 3 with the paraphrase arm) × `n_seeds` (5).
-Primary = 3,965 local cells; each arm roughly doubles or adds. See the cost
-note below.
+(61) × framings (3) × paraphrases (3) × formats (1) × `n_seeds` (5). Main run =
+35,685 local cells (9× a single-cell primary); each robustness arm adds ~3,965.
+See the cost note below.
 
 Paraphrase `p0` is **the researcher's own instruction** from the battery JSON;
 `p1`/`p2` bound it. Under the third-person framing the p0 instructions are
@@ -232,13 +235,36 @@ MSI is also the one scale not harmonized to agree–disagree: it is bipolar and
 ideal-referenced, so only its *point count* is harmonized (9 → 7) and the ideal
 anchors are kept. Reported separately from the four agree–disagree scales.
 
-## Resume
+## Resume & monitoring
 
-On by default. Every row carries a `cell_key` derived from
+Resume is on by default. Every row carries a `cell_key` derived from
 (model, item, framing, reasoning, format, context, paraphrase, method, trial).
 Re-running skips cells already in the output file, so an interrupted run picks up
-where it stopped. A truncated final line from a killed run is tolerated. Disable
-with `--no-resume`.
+where it stopped. Cells that only ever hit an **infrastructure error** (their
+`notes` start with `error:`) are **retried** on the next run rather than skipped
+— a genuine non-numeric answer or refusal is real data and is kept. Writes are
+`fsync`'d every 25 records, a truncated final line from a killed run is
+tolerated, and SIGINT/SIGTERM finish the current batch and mark the run
+`interrupted` before exiting. Disable with `--no-resume`.
+
+Every run also writes, so a long unattended job stays inspectable:
+
+* `logs/run_<UTC>_<arm>.log` — full timestamped log; survives tmux/nohup, so
+  `tail -f` it. The console echoes the same lines plus a per-model **heartbeat**
+  (cells/s, ETA, running error/refusal/coverage counts). The first error per
+  model logs a full traceback; the rest log one concise line each.
+* `<out>.status.json` — machine-readable progress, rewritten atomically on each
+  heartbeat and keyed to the output file.
+
+Check progress from any other shell without touching the run:
+
+```bash
+python runner.py --status                          # dashboard for the default output
+python runner.py --status --out results.jsonl      # or a specific file
+```
+
+Once a model's GGUF is cached, filename resolution falls back to the local HF
+cache, so a resumed run scores with **no network** (`HF_HUB_OFFLINE=1`).
 
 ## Item screening
 
@@ -285,10 +311,14 @@ Deliberately left out, with a guard rather than silent bad data:
 
 - [x] Phase 0 — pipeline runs end-to-end offline; parsing, refusal handling,
       resume, and both measurement paths verified through `MockAdapter`.
-- [ ] Phase 1 (open-source, before first run) — install the local deps; smoke-
-      test the **real** logprob path on one GGUF (coverage sane?); confirm
-      `--verify-thinking` says OK (not IGNORED) for the Qwen models; pre-register
-      factor levels, seeds, and trimming rules.
+- [x] Phase 1a — real logprob path smoke-tested on Gemma4-12B (GGUF, GPU):
+      `option_mass_coverage = 1.000`, distributions peaked, ratings vary by
+      seed; `--verify-thinking` = OK for all six Qwen models. Fixed en route:
+      llama-cpp-python needs `logits_all=True` for the logprob readout, and
+      GGUF resolution now falls back to the local cache when offline.
+      (GPU server: 2× RTX 4090, `logging`/`--status`/graceful-resume added.)
+- [ ] Phase 1b — pre-register factor levels, seeds, and trimming rules; free
+      disk for the remaining models (~70 GB; 5 of 13 cached, ~9 GB free).
 - [ ] Phase 2 — main open-source run (13 models, logprob, ~3,965 primary cells).
 - [ ] Phase 3 — analysis (EFA/CFA, nomological checks, bias diagnostics).
 - [ ] Phase 4 — closed-source APIs (verify Claude-Sonnet-5 date + GPT-5.6/API
