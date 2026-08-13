@@ -128,7 +128,9 @@ trust llama.cpp's chat handler to honor the toggle — they render the prompt
 through the model's **own chat template** (`ChatTemplateRenderer`, HF tokenizer,
 no weights) with `enable_thinking=False`, which pre-fills a closed empty think
 block so the next token is the rating. The rendered string is then fed to the
-GGUF as a raw completion. Guarantees:
+GGUF as a raw completion. `hf_id` remains the upstream/provenance identifier;
+`tokenizer_id` may point at a public mirror of the same tokenizer when the
+upstream repository is gated. Guarantees:
 
 * logprob scoring always renders thinking off (you cannot logprob-score a
   reasoning trace);
@@ -265,6 +267,9 @@ python runner.py --status --out results.jsonl      # or a specific file
 
 Once a model's GGUF is cached, filename resolution falls back to the local HF
 cache, so a resumed run scores with **no network** (`HF_HUB_OFFLINE=1`).
+Before an uncached GGUF is downloaded, the runner checks its remote size against
+the free space in `HF_HOME` (including a 1 GiB reserve) and stops the run with an
+actionable error instead of leaving a doomed multi-gigabyte transfer running.
 
 ## Item screening
 
@@ -290,6 +295,8 @@ pip install pyyaml huggingface_hub llama-cpp-python transformers
 
 `transformers` is needed even for the GGUF path — it renders prompts through the
 model's chat template (tokenizer only). `--dry-run` still works with none of it.
+Use `HF_HOME` to place both tokenizer and GGUF caches; the deprecated
+`TRANSFORMERS_CACHE` variable is normalized automatically for this process.
 
 ## Not implemented
 

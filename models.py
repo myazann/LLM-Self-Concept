@@ -21,10 +21,18 @@ import hashlib
 import math
 import os
 import re
+import shutil
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Optional
+
+# transformers 5 removes TRANSFORMERS_CACHE. Preserve the user's chosen cache
+# when it is their only setting, then use the supported HF_HOME variable. This
+# is process-local and also keeps transformers and huggingface_hub in one cache.
+if os.environ.get("TRANSFORMERS_CACHE"):
+    os.environ.setdefault("HF_HOME", os.environ["TRANSFORMERS_CACHE"])
+    os.environ.pop("TRANSFORMERS_CACHE", None)
 
 from model_registry import (
     ANTHROPIC_BACKEND,
@@ -35,6 +43,16 @@ from model_registry import (
     ModelSpec,
     split_hf_gguf_ref,
 )
+
+# The LOGPROB path never samples — it reads the distribution at the answer
+# position — so every backend that exposes logprobs is called with this, and
+# runner._record stamps it on the row instead of the spec's sampling
+# temperature. Single source of truth so the two cannot drift.
+LOGPROB_TEMPERATURE = 0.0
+
+
+class InsufficientDiskSpaceError(RuntimeError):
+    """The configured Hugging Face cache cannot hold a pending model file."""
 
 
 # ---------------------------------------------------------------------------
@@ -246,31 +264,49 @@ class ChatTemplateRenderer:
         numeric engine (GGUF weights) and the prompt formatting (tokenizer)
         come from the same model.
 
-    Tokenizer-only load: a few MB of JSON, no weights, CPU. Cached per hf_id.
+    Tokenizer-only load: a few MB of JSON, no weights, CPU. Cached per model id.
     """
     _cache: dict = {}
 
-    def __init__(self, hf_id: Optional[str], required: bool):
-        self.hf_id = hf_id
-        self.tokenizer = self._load(hf_id) if hf_id else None
+    def __init__(self, model_id: Optional[str], required: bool):
+        self.model_id = model_id
+        try:
+            self.tokenizer = self._load(model_id) if model_id else None
+            if self.tokenizer is not None and not getattr(
+                self.tokenizer, "chat_template", None
+            ):
+                raise RuntimeError("the tokenizer has no chat template")
+        except Exception as err:
+            self.tokenizer = None
+            if required:
+                raise RuntimeError(
+                    f"Cannot load the required chat template from {model_id!r}: "
+                    f"{type(err).__name__}: {err}. Set a public `tokenizer_id` "
+                    "in models.yaml or authenticate with `HF_TOKEN` if the "
+                    "repository is gated."
+                ) from err
         if self.tokenizer is None and required:
             raise RuntimeError(
-                f"Cannot guarantee thinking-off for {hf_id!r}: its chat template "
-                "is unavailable. Install `transformers` (tokenizer only — no "
-                "weights, no torch) and set the model's `hf_id` in models.yaml."
+                "This instruct model requires `tokenizer_id` (or `hf_id`) in "
+                "models.yaml so its prompt can be rendered correctly."
             )
 
     @classmethod
-    def _load(cls, hf_id):
-        if hf_id in cls._cache:
-            return cls._cache[hf_id]
+    def _load(cls, model_id):
+        if model_id in cls._cache:
+            return cls._cache[model_id]
         try:
             from transformers import AutoTokenizer
+        except ImportError as err:
+            raise RuntimeError(
+                "Prompt rendering needs `transformers`; install the local "
+                "dependencies from requirements.txt."
+            ) from err
 
-            tok = AutoTokenizer.from_pretrained(hf_id)
-        except Exception:
-            tok = None
-        cls._cache[hf_id] = tok
+        # use_fast avoids optional sentencepiece/protobuf dependencies whenever
+        # the repository supplies tokenizer.json (all configured local models do).
+        tok = AutoTokenizer.from_pretrained(model_id, use_fast=True)
+        cls._cache[model_id] = tok
         return tok
 
     @property
@@ -314,6 +350,13 @@ class LlamaCppAdapter(ModelAdapter):
                 "with --dry-run to exercise the pipeline offline."
             ) from err
 
+        # Validate/download the tiny tokenizer before touching multi-GB weights.
+        # This prevents a gated or mistyped tokenizer repo from wasting a model
+        # download and only failing after llama.cpp has loaded it.
+        self.renderer = ChatTemplateRenderer(
+            spec.tokenizer_id or spec.hf_id, required=(spec.kind != "base")
+        )
+
         model_path = self._ensure_local_file()
         runtime = spec.runtime
         kwargs = {
@@ -331,14 +374,6 @@ class LlamaCppAdapter(ModelAdapter):
             kwargs["n_threads"] = threads
         self.llm = Llama(**kwargs)
 
-        # Prompt rendering comes from the model's OWN chat template so that
-        # (a) enable_thinking is actually honored and (b) the format matches the
-        # model (Gemma's <start_of_turn>, Qwen's <|im_start|>, ...). Required
-        # for every instruct model; base models use the raw-completion path.
-        self.renderer = ChatTemplateRenderer(
-            spec.hf_id, required=(spec.kind != "base")
-        )
-
     def _ensure_local_file(self):
         from pathlib import Path
 
@@ -347,7 +382,13 @@ class LlamaCppAdapter(ModelAdapter):
         if local.exists():
             return local
 
-        from huggingface_hub import hf_hub_download
+        from huggingface_hub import (
+            get_hf_file_metadata,
+            hf_hub_download,
+            hf_hub_url,
+            try_to_load_from_cache,
+        )
+        from huggingface_hub.constants import HF_HUB_CACHE
 
         repo_id, _ = split_hf_gguf_ref(ref)
         filename = self.spec.quantization.resolved_file
@@ -356,9 +397,48 @@ class LlamaCppAdapter(ModelAdapter):
                 f"{self.spec.alias}: GGUF filename unresolved. Call "
                 "ModelRegistry.with_resolved_quant(spec) before building the adapter."
             )
+        cached = try_to_load_from_cache(repo_id, filename)
+        if isinstance(cached, str):
+            return Path(cached)
+
         download_kwargs = {"repo_id": repo_id, "filename": filename}
         if os.environ.get("HF_TOKEN"):
             download_kwargs["token"] = os.environ["HF_TOKEN"]
+
+        # huggingface_hub merely warns on insufficient space and starts the
+        # transfer anyway. Refuse before creating a doomed partial download.
+        try:
+            metadata = get_hf_file_metadata(
+                hf_hub_url(repo_id, filename), token=download_kwargs.get("token")
+            )
+            if metadata.size:
+                cache_root = Path(HF_HUB_CACHE)
+                cache_root.mkdir(parents=True, exist_ok=True)
+                partial = (
+                    cache_root
+                    / f"models--{repo_id.replace('/', '--')}"
+                    / "blobs"
+                    / f"{metadata.etag}.incomplete"
+                )
+                partial_size = partial.stat().st_size if partial.exists() else 0
+                remaining = max(0, metadata.size - partial_size)
+                reserve = 1024**3  # leave room for metadata, temp files, and OS use
+                free = shutil.disk_usage(cache_root).free
+                if free < remaining + reserve:
+                    gib = 1024**3
+                    raise InsufficientDiskSpaceError(
+                        f"Not enough free space for {filename}: "
+                        f"{remaining / gib:.1f} GiB remains to download but "
+                        f"{free / gib:.1f} GiB is free in {cache_root}. "
+                        f"Set HF_HOME to a filesystem with at least "
+                        f"{(remaining + reserve) / gib:.1f} GiB free, then rerun."
+                    )
+        except InsufficientDiskSpaceError:
+            raise
+        except Exception:
+            # Metadata checks can fail offline; hf_hub_download still has its
+            # normal local/offline diagnostics and may find a cached snapshot.
+            pass
         return Path(hf_hub_download(**download_kwargs))
 
     # -- prompt plumbing ---------------------------------------------------
@@ -419,6 +499,17 @@ class LlamaCppAdapter(ModelAdapter):
         tokens = self._prompt_tokens(prompt, enable)
         out = []
         for _ in range(n):
+            # Reset per draw, for the same reason as score_item — but here the
+            # asymmetry is between the draws themselves, not just across
+            # prompts. Left alone, draw 1 gets its logits from a batched
+            # prefill of the whole prompt; every later draw hits
+            # Llama.generate's prefix branch, which (prompt_consumed) sets
+            # reuse_prefix = len(prompt) - 1, truncates the KV there and
+            # replays a SINGLE token. Same prompt, different arithmetic, so
+            # draws 2..n are not sampled from the distribution draw 1 was.
+            # n_samples is supposed to be n i.i.d. draws from one conditional;
+            # the reset is what makes that true. It costs a prefill per draw.
+            self.llm.reset()
             resp = self.llm.create_completion(
                 prompt=tokens,
                 temperature=self.spec.temperature,
@@ -446,10 +537,25 @@ class LlamaCppAdapter(ModelAdapter):
         outside the returned top-k get 0 mass, reported via `coverage`.
         """
         tokens = self._prompt_tokens(prompt, enable_thinking=False)
+        # Drop the KV cache first. llama_cpp.Llama.generate matches the longest
+        # common prefix against whatever the previous call left behind, so the
+        # same prompt gets re-evaluated from a different offset depending on
+        # what ran before it — different batch shapes, different float
+        # accumulation, slightly different logits. On the Gemma-3 pilot 13% of
+        # repeated prompts came back with a different distribution (mean spread
+        # 0.006 rating points, worst case 0.74) purely as a function of call
+        # order. Llama.eval() issues kv_cache_seq_rm from n_tokens, so with
+        # n_tokens=0 the whole prompt is re-evaluated in fixed n_batch chunks
+        # and the readout is a pure function of the prompt.
+        #
+        # Note when testing this: an A->A probe proves nothing, because
+        # generate() has an exact_prompt_cached branch that skips evaluation
+        # entirely and re-reads the stored logits. A->B->A is the real check.
+        self.llm.reset()
         resp = self.llm.create_completion(
             prompt=tokens,
             max_tokens=1,
-            temperature=0.0,
+            temperature=LOGPROB_TEMPERATURE,
             logprobs=100,
         )
         choice = resp["choices"][0]
@@ -673,7 +779,7 @@ class OpenAIAdapter(ModelAdapter):
             return self.client.chat.completions.create(
                 model=self.spec.ref,
                 messages=self._messages(prompt),
-                temperature=0,
+                temperature=LOGPROB_TEMPERATURE,
                 max_completion_tokens=1,
                 logprobs=True,
                 top_logprobs=20,

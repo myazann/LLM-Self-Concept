@@ -42,8 +42,15 @@ window:
 # --- defaults applied to every model unless overridden per-entry ------------
 defaults:
   temperature: 0.7
-  n_samples: 20          # sampling path: draws per cell
-  n_seeds: 5             # logprob path: order/paraphrase seeds per cell
+  n_samples: 20          # sampling path: draws per cell (must stay EVEN)
+  # LOGPROB path: trials per cell. Keep this EVEN and small. A trial's only
+  # free variable is option direction (paraphrase_id is a grid factor, not a
+  # seeded draw), so the randomization space has cardinality 2 — at 5 trials
+  # every cell ran 2 distinct prompts and ~60% of the calls were cache re-reads
+  # of a distribution already measured. runner._render now pins direction to
+  # trial_idx % 2, so 2 trials = one ascending + one descending, balanced.
+  # Raise only in pairs, and only once a trial varies something else too.
+  n_seeds: 2
   max_output_tokens: 512            # rating-only needs very little
   max_output_tokens_reasoning: 2048 # reason-then-rate: room for the thought channel
   quantization:
@@ -123,6 +130,7 @@ models:
     backend: llamacpp
     ref: unsloth/gemma-4-E4B-it-GGUF
     hf_id: google/gemma-4-E4B-it
+    tokenizer_id: unsloth/gemma-4-E4B-it
     quantization: {format: gguf, quant: Q4_K_M}
     methods: [sample, logprob]
     size_tier: small
@@ -138,6 +146,7 @@ models:
     backend: llamacpp
     ref: unsloth/gemma-4-26B-A4B-it-GGUF
     hf_id: google/gemma-4-26B-A4B-it
+    tokenizer_id: unsloth/gemma-4-26B-A4B-it
     quantization: {format: gguf, quant: Q4_K_M}
     methods: [sample, logprob]
     size_tier: medium
@@ -154,6 +163,7 @@ models:
     backend: llamacpp
     ref: unsloth/gemma-4-31B-it-GGUF
     hf_id: google/gemma-4-31B-it
+    tokenizer_id: unsloth/gemma-4-31B-it
     quantization: {format: gguf, quant: Q4_K_M}
     methods: [sample, logprob]
     size_tier: medium
@@ -169,6 +179,7 @@ models:
     backend: llamacpp
     ref: unsloth/gemma-4-12b-it-GGUF     # NB: repo uses lowercase "12b"
     hf_id: google/gemma-4-12B-it
+    tokenizer_id: unsloth/gemma-4-12b-it
     quantization: {format: gguf, quant: Q4_K_M}
     methods: [sample, logprob]
     size_tier: small
@@ -213,6 +224,7 @@ models:
     backend: llamacpp
     ref: unsloth/gemma-3-4b-it-GGUF
     hf_id: google/gemma-3-4b-it
+    tokenizer_id: unsloth/gemma-3-4b-it
     quantization: {format: gguf, quant: Q4_K_M}
     methods: [sample, logprob]
     size_tier: small
@@ -228,6 +240,7 @@ models:
     backend: llamacpp
     ref: unsloth/gemma-3-12b-it-GGUF
     hf_id: google/gemma-3-12b-it
+    tokenizer_id: unsloth/gemma-3-12b-it
     quantization: {format: gguf, quant: Q4_K_M}
     methods: [sample, logprob]
     size_tier: small
@@ -243,6 +256,7 @@ models:
     backend: llamacpp
     ref: unsloth/gemma-3-27b-it-GGUF
     hf_id: google/gemma-3-27b-it
+    tokenizer_id: unsloth/gemma-3-27b-it
     quantization: {format: gguf, quant: Q4_K_M}
     methods: [sample, logprob]
     size_tier: medium

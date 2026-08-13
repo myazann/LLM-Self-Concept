@@ -26,7 +26,12 @@ import obs
 import prompts as prompts_mod
 from config import ExperimentConfig, load_config
 from model_registry import ModelSpec, load_registry
-from models import build_adapter, parse_rating
+from models import (
+    LOGPROB_TEMPERATURE,
+    InsufficientDiskSpaceError,
+    build_adapter,
+    parse_rating,
+)
 from scales import load_battery
 from schema import (
     Framing,
@@ -70,8 +75,17 @@ def _methods_for(spec: ModelSpec, cfg: ExperimentConfig) -> list:
 
 def _n_trials(spec: ModelSpec, cfg: ExperimentConfig, method: str) -> int:
     if method == Method.SAMPLE.value:
-        return cfg.n_samples_override or spec.n_samples
-    return cfg.n_seeds_override or spec.n_seeds
+        n = cfg.n_samples_override or spec.n_samples
+    else:
+        n = cfg.n_seeds_override or spec.n_seeds
+    if n % 2:
+        # Direction is counterbalanced against trial_idx, so an odd trial count
+        # gives every cell one extra ascending administration.
+        obs.get_logger().warning(
+            "%s: n_trials=%d is odd for method=%s — option direction cannot be "
+            "balanced within a cell. Use an even count.", spec.alias, n, method,
+        )
+    return n
 
 
 def expand_cells(specs, battery, cfg: ExperimentConfig, arm_name=None):
@@ -146,9 +160,16 @@ def _render(cell, cfg):
         cell["paraphrase_id"],
         cell["trial_idx"],
     )
+    # Option direction is COUNTERBALANCED, not sampled: even trials ascending,
+    # odd trials descending. Drawing it from the seed gave each cell a random
+    # asc/desc split (6% of cells single-direction, a third at 4:1), which
+    # leaks a ~0.44-point per-item offset into the cell mean. With an even
+    # n_trials this is exactly balanced within every cell.
+    reverse_direction = bool(cell["trial_idx"] % 2)
     if spec.is_base_model:
         prompt = prompts_mod.render_base_prompt(
-            scale, item, cell["framing"], rendered_scale, cell["paraphrase_id"], seed
+            scale, item, cell["framing"], rendered_scale, cell["paraphrase_id"], seed,
+            reverse_direction,
         )
     elif cell["item_context"] == ItemContext.FULL_BATTERY.value:
         # NOT WIRED UP. prompts.render_battery_prompt() produces a correct
@@ -165,7 +186,7 @@ def _render(cell, cfg):
     else:
         prompt = prompts_mod.render_item_prompt(
             scale, item, cell["framing"], cell["reasoning_mode"], rendered_scale,
-            cell["paraphrase_id"], seed,
+            cell["paraphrase_id"], seed, reverse_direction,
         )
     return prompt, rendered_scale, seed
 
@@ -204,7 +225,16 @@ def _record(cell, cfg, prompt, rendered_scale, seed, *, raw, parsed, dist,
         response_distribution=dist,
         refusal_flag=refusal,
         parse_failed=parse_failed,
-        temperature=spec.temperature,
+        # The temperature that actually produced this row. LOGPROB reads the
+        # distribution at the answer position and never samples, so recording
+        # the spec's sampling temperature (0.7) there described a knob that was
+        # not in play. Sourced from models.LOGPROB_TEMPERATURE so the record and
+        # the adapters cannot drift apart.
+        temperature=(
+            LOGPROB_TEMPERATURE
+            if cell["method"] == Method.LOGPROB.value
+            else spec.temperature
+        ),
         prompt_hash=prompt.prompt_hash,
         prompt_system=prompt.system,
         prompt_user=prompt.user,
@@ -282,6 +312,7 @@ def run(cfg: ExperimentConfig, *, dry_run=False, arm_name=None, model_filter=Non
     status.set_totals(already_done=already)
     killer = obs.GracefulKiller(log)
     stats = Counter()
+    aborted = False
     run_started = time.monotonic()
 
     def heartbeat(spec, cells, i):
@@ -404,12 +435,33 @@ def run(cfg: ExperimentConfig, *, dry_run=False, arm_name=None, model_filter=Non
                         heartbeat(spec, cells, i)
                 if batch:
                     write_jsonl(batch, out)
+        except KeyboardInterrupt:
+            # Some native download backends translate SIGINT into
+            # KeyboardInterrupt even though GracefulKiller installed a handler.
+            # Treat it as the same resumable shutdown, without a traceback.
+            killer.stop = True
+            log.warning("[%s] interrupted during model setup/inference; "
+                        "state is safe and the next run will resume", spec.alias)
+            status.set_model(spec.alias, state="interrupted",
+                             done=done_before + m["written"])
+            break
+        except InsufficientDiskSpaceError as err:
+            # Every following GGUF uses the same cache filesystem, so continuing
+            # would just repeat the failure for each model.
+            aborted = True
+            stats["errors"] += 1
+            log.error("[%s] model download aborted — %s", spec.alias, err)
+            status.set_model(spec.alias, state="error",
+                             done=done_before + m["written"])
+            break
         except NotImplementedError:
             raise  # design guard (e.g. full_battery) — fail loudly, don't skip
         except Exception:  # noqa: BLE001 — a model that won't load must not kill the others
             log.exception("[%s] fatal error (model load / adapter) — skipping", spec.alias)
             status.set_model(spec.alias, state="error", done=done_before + m["written"])
-            stats.update({"errors": m["errors"]})
+            # Per-cell errors were counted when their records were created;
+            # count the model-level failure itself exactly once.
+            stats["errors"] += 1
             if killer.stop:
                 break
             continue
@@ -437,7 +489,10 @@ def run(cfg: ExperimentConfig, *, dry_run=False, arm_name=None, model_filter=Non
                         spec.alias, to_run - stats["written"])
             break
 
-    status.update(state="interrupted" if killer.stop else "done", current_model=None)
+    if aborted:
+        stats["aborted"] = 1
+    final_state = "error" if aborted else ("interrupted" if killer.stop else "done")
+    status.update(state=final_state, current_model=None)
     return dict(stats)
 
 
@@ -475,7 +530,7 @@ def verify_thinking(cfg: ExperimentConfig, model_filter=None) -> str:
             lines.append(f"  {s.alias:<22} control=none          -> prompt-controlled (no native thinking)")
             continue
         try:
-            r = ChatTemplateRenderer(s.hf_id, required=True)
+            r = ChatTemplateRenderer(s.tokenizer_id or s.hf_id, required=True)
             off = r.render(p.system, p.user, enable_thinking=False)
             on = r.render(p.system, p.user, enable_thinking=True)
             closed = "</think>" in off
@@ -599,14 +654,27 @@ def main(argv=None) -> int:
         arms = [None] + sorted(cfg.arms)
 
     totals = Counter()
-    for arm in arms:
-        if arm:
-            logger.info("=== arm: %s ===", arm)
-        stats = run(cfg, dry_run=args.dry_run, arm_name=arm,
-                    model_filter=model_filter, limit=args.limit, out_path=out,
-                    logger=logger)
-        totals.update(stats)
+    try:
+        for arm in arms:
+            if arm:
+                logger.info("=== arm: %s ===", arm)
+            stats = run(cfg, dry_run=args.dry_run, arm_name=arm,
+                        model_filter=model_filter, limit=args.limit, out_path=out,
+                        logger=logger)
+            totals.update(stats)
+            if stats.get("aborted"):
+                break
+    except KeyboardInterrupt:
+        # Last-resort guard for an interrupt outside run() (for example during
+        # registry resolution). Shells still receive the conventional 130.
+        logger.warning("interrupted; completed JSONL batches are safe; rerun "
+                       "the same command to resume")
+        return 130
 
+    if totals["aborted"]:
+        logger.error("RUN STOPPED | wrote %s record(s) to %s | errors=%s",
+                     f"{totals['written']:,}", out, f"{totals['errors']:,}")
+        return 1
     logger.info("ALL DONE | wrote %s record(s) to %s | refusals=%s parse_failures=%s errors=%s",
                 f"{totals['written']:,}", out, f"{totals['refusals']:,}",
                 f"{totals['parse_failures']:,}", f"{totals['errors']:,}")

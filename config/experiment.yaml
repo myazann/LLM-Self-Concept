@@ -82,7 +82,11 @@ trials:
   sample_baseline: false
   logprob_where_available: true
   n_samples_override: null   # null -> per-model n_samples from models.yaml (only used if sample_baseline)
-  n_seeds_override: null      # null -> per-model n_seeds (logprob seeds per cell)
+  # null -> per-model n_seeds (logprob trials per cell; default 2 = one
+  # ascending + one descending). Keep any override EVEN: option direction is
+  # counterbalanced against trial_idx, so an odd count leaves every cell with
+  # an unbalanced split. The runner warns if this is odd.
+  n_seeds_override: null
 
 # --- randomization ---------------------------------------------------------
 random_seed_base: 1000
@@ -105,4 +109,4 @@ pilot:
   models: [Gemma4-12B]
   scales: [RSES_1965_LLM_ADAPT]
   framings: [first_person_ack, first_person_bare, third_person_assistant]
-  n_trials: 5    # logprob seeds (or samples, if sample_baseline is on) per cell
+  n_trials: 2    # logprob trials (or samples, if sample_baseline is on) per cell — keep EVEN

@@ -262,11 +262,32 @@ def render_scale(
 
 
 def render_scale_block(points, reverse_direction: bool = False) -> str:
-    """Text block listing the options. Direction is randomized per trial; the
-    numeric value stays glued to its label so the *content* is what is anchored.
+    """Text block listing the options. Direction is a counterbalanced factor
+    (see `_resolve_direction`); the numeric value stays glued to its label so
+    the *content* is what is anchored.
     """
     ordered = list(reversed(points)) if reverse_direction else list(points)
     return "\n".join(f"{value} = {label}" for value, label in ordered)
+
+
+def _resolve_direction(rng, reverse_direction=None) -> bool:
+    """Option-scale direction for one trial: True == descending (max first).
+
+    Direction is a FACTOR, not noise. Measured on Gemma-3, flipping the scale
+    moves the expected rating by ~0.44 points on a 7-point scale, and the shift
+    is item-specific (the signed mean across items is only ~-0.09), so an
+    unbalanced asc/desc split injects a per-item offset that is uncorrelated
+    across items — exactly what deflates inter-item covariance and with it
+    alpha/EFA. Sampling it per trial from the cell seed left 6% of cells with
+    one direction only and a third at 4:1, so the runner now pins it against
+    trial_idx instead (see runner._render).
+
+    The seeded draw is still consumed even when the caller pins the direction,
+    so anything else drawn from the same stream (the battery item shuffle)
+    is unaffected by whether direction was pinned.
+    """
+    drawn = rng.random() < 0.5
+    return drawn if reverse_direction is None else bool(reverse_direction)
 
 
 # ---------------------------------------------------------------------------
@@ -304,10 +325,11 @@ def render_item_prompt(
     rendered_scale: RenderedScale,
     paraphrase_id: str = "p0",
     order_seed: int = 0,
+    reverse_direction: bool = None,
 ) -> RenderedPrompt:
     """Build the chat prompt for one (scale, item, framing, ...) cell."""
     rng = random.Random(order_seed)
-    reverse_direction = rng.random() < 0.5
+    reverse_direction = _resolve_direction(rng, reverse_direction)
     block = render_scale_block(rendered_scale.points, reverse_direction)
     realized = tuple(reversed(rendered_scale.values)) if reverse_direction else tuple(rendered_scale.values)
 
@@ -345,6 +367,7 @@ def render_base_prompt(
     rendered_scale: RenderedScale,
     paraphrase_id: str = "p0",
     order_seed: int = 0,
+    reverse_direction: bool = None,
 ) -> RenderedPrompt:
     """Completion-format prompt for a BASE (non-instruction-tuned) model.
 
@@ -354,7 +377,7 @@ def render_base_prompt(
     the only supported administration path for `kind: base` models.
     """
     rng = random.Random(order_seed)
-    reverse_direction = rng.random() < 0.5
+    reverse_direction = _resolve_direction(rng, reverse_direction)
     block = render_scale_block(rendered_scale.points, reverse_direction)
     realized = tuple(reversed(rendered_scale.values)) if reverse_direction else tuple(rendered_scale.values)
 
@@ -395,6 +418,7 @@ def render_battery_prompt(
     rendered_scale: RenderedScale,
     paraphrase_id: str = "p0",
     order_seed: int = 0,
+    reverse_direction: bool = None,
 ) -> RenderedPrompt:
     """All items of one scale in a single context (plan §2.7 robustness arm).
 
@@ -403,7 +427,7 @@ def render_battery_prompt(
     the record can reconstruct exactly what was administered.
     """
     rng = random.Random(order_seed)
-    reverse_direction = rng.random() < 0.5
+    reverse_direction = _resolve_direction(rng, reverse_direction)
     block = render_scale_block(rendered_scale.points, reverse_direction)
     realized = tuple(reversed(rendered_scale.values)) if reverse_direction else tuple(rendered_scale.values)
 

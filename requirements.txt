@@ -17,9 +17,7 @@ statsmodels       # mixed-effects models for non-independent observations
 
 # --- open-source path (the default run) -----------------------------------
 # llama-cpp-python   # GGUF / quantized open weights  (primary local engine)
-# transformers       # REQUIRED for the local path too: renders prompts via the
-#                    #   model's own chat template so enable_thinking is honored
-#                    #   (tokenizer only — no torch/weights needed for GGUF).
+transformers       # tokenizer/chat-template only; does not install model weights
 
 # --- base models / non-GGUF quantization (Phase 2) ------------------------
 # torch              # required by transformers for weight loading

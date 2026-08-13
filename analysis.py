@@ -7,7 +7,8 @@ effects). Everything follows the plan's analysis order.
 Respondent unit: because observations are non-independent, we treat each
 (model x framing x paraphrase) as a pseudo-respondent row and items as columns,
 after aggregating ratings across trials (mean for SAMPLE, mean expected-value
-for LOGPROB). Replace with a mixed-effects model for inference.
+for LOGPROB) — evenly weighted across option direction, see `aggregate`.
+Replace with a mixed-effects model for inference.
 """
 from __future__ import annotations
 
@@ -55,15 +56,38 @@ def normalize(value, n_points):
     return (value - 1) / (n_points - 1)
 
 
-def aggregate(records, stratify_format=True):
+def direction_of(r):
+    """"ascending" | "descending" — which way the option block was printed.
+
+    Not a stored column: `option_order` is the realized display order, so its
+    first element is the top-listed option and that is the whole story.
+    """
+    return "ascending" if not r.option_order or r.option_order[0] == 1 else "descending"
+
+
+def aggregate(records, stratify_format=True, balance_direction=True):
     """Mean reverse-keyed rating per respondent-cell x item, ignoring refusals.
 
     Keyed by (model, framing, paraphrase, response_format, scale, item, subscale).
     Response format is part of the key by default: harmonized and native
     administrations are different measurements and pooling them silently is
     exactly the "measurement phantom" the plan warns about.
+
+    With `balance_direction` (default), trials are averaged WITHIN option
+    direction and then across directions, so a cell that happened to run more
+    ascending than descending trials still contributes an evenly weighted mean.
+    A flat mean over trials does not: direction moves the expected rating by
+    ~0.44 points and the shift is item-specific, so an unbalanced split becomes
+    a per-item offset that is uncorrelated across items and eats the inter-item
+    covariance. On the Gemma-3 pilot (random, unbalanced direction) this was
+    the difference between alpha=0.088 and alpha=0.313 on the RSES, and 0.562
+    vs 0.789 on the SLCSR. Runs from the counterbalanced runner are balanced by
+    construction and this is then a no-op.
+
+    Returns (means, points, n_unbalanced) — `n_unbalanced` counts cells that
+    carried only one direction, which should be 0 on a completed run.
     """
-    buckets = defaultdict(list)
+    buckets = defaultdict(lambda: defaultdict(list))
     points = {}
     for r in records:
         value = reverse_key_record(r)
@@ -71,9 +95,17 @@ def aggregate(records, stratify_format=True):
             continue
         fmt = r.response_format if stratify_format else "pooled"
         key = (r.model_id, r.framing, r.paraphrase_id, fmt, r.scale_id, r.item_id, r.subscale)
-        buckets[key].append(value)
+        bucket = direction_of(r) if balance_direction else "all"
+        buckets[key][bucket].append(value)
         points[key] = r.n_scale_points or len(r.option_order) or 7
-    return {k: sum(v) / len(v) for k, v in buckets.items()}, points
+
+    means, n_unbalanced = {}, 0
+    for key, by_dir in buckets.items():
+        if balance_direction and len(by_dir) < 2:
+            n_unbalanced += 1
+        per_dir = [sum(v) / len(v) for v in by_dir.values()]
+        means[key] = sum(per_dir) / len(per_dir)
+    return means, points, n_unbalanced
 
 
 def build_matrix(agg, scale_id, response_format=None):
@@ -120,7 +152,10 @@ def run(path="results.jsonl"):
     for m, s in refusal_summary(records).items():
         print(f"  refusals {m}: {s['rate']:.1%} ({s['refusals']}/{s['total']})")
 
-    agg, _points = aggregate(records)
+    agg, _points, n_unbalanced = aggregate(records)
+    if n_unbalanced:
+        print(f"  WARNING: {n_unbalanced}/{len(agg)} cells carry only one option "
+              f"direction — their means keep that direction's bias.")
 
     print("\n== Reliability (Cronbach's alpha, pseudo-respondents) ==")
     scale_ids = sorted({k[4] for k in agg})

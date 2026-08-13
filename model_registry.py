@@ -101,6 +101,7 @@ class ModelSpec:
     methods: tuple = ("sample",)
     quantization: Quantization = field(default_factory=Quantization)
     hf_id: Optional[str] = None     # unquantized upstream, for provenance
+    tokenizer_id: Optional[str] = None  # public/template source; defaults to hf_id
     params_total_b: Optional[float] = None
     params_active_b: Optional[float] = None
     size_tier: Optional[str] = None
@@ -464,6 +465,7 @@ def load_registry(path: Path | str = CONFIG_PATH) -> ModelRegistry:
                 methods=tuple(entry.get("methods", ("sample",))),
                 quantization=_build_quantization(entry, defaults),
                 hf_id=entry.get("hf_id"),
+                tokenizer_id=entry.get("tokenizer_id"),
                 params_total_b=entry.get("params_total_b"),
                 params_active_b=entry.get("params_active_b"),
                 size_tier=entry.get("size_tier"),
