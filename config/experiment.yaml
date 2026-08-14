@@ -5,7 +5,7 @@
 # literature says move results most — framing x instruction paraphrase (plan
 # §2.6/§2.8) — while pinning reasoning / format / context, and uses LOGPROB
 # only. Each remaining factor is then swept once as a robustness ARM, isolated
-# at the primary framing/paraphrase.
+# at the primary framing/instruction.
 #
 #   cells(main)      = models x items x framings x paraphrases x trials
 #                      x 1 reasoning x 1 format x 1 context   (logprob)
@@ -24,24 +24,24 @@ output:
 # --- pinned levels: held constant during the main run ----------------------
 # These are also the single reference level a robustness arm isolates against.
 primary:
-  framing: first_person_ack   # reference framing when an arm isolates another factor
+  framing: first_person_bare  # default self-report estimand; ACK/third-person are analysis framings
   reasoning_mode: rating_only
   response_format: harmonized_7
   item_context: isolated
   paraphrase_id: p0           # p0 = the researcher's own instruction from the battery JSON
 
 # --- core crossed factors: the main run crosses these two FULLY -------------
-# Framing and instruction paraphrase move results most (Röttger; Dominguez-
-# Olmedo; Argyle), so the main run crosses them for variance decomposition
-# instead of sweeping them one at a time. This makes the main run
-# framings (3) x paraphrases (3) = 9x a single-cell primary.
+# The run crosses framing and instruction form so both questions can be asked,
+# but they have different inferential roles. At first_person_bare, p1/p2 are
+# robustness checks against the p0 default. At p0, framing differences are
+# substantive contrasts in target/self-presentation, not measurement failures.
 core_crossed:
   framings: [first_person_ack, first_person_bare, third_person_assistant]
   paraphrase_ids: [p0, p1, p2]
 
 # --- robustness arms: each sweeps ONE pinned factor off its level -----------
 # Enable individually with `runner.py --arm <name>`; `--arm all` runs each in
-# turn. Arms are isolated at the primary framing/paraphrase (first_person_ack,
+# turn. Arms are isolated at the primary framing/instruction (first_person_bare,
 # p0) to stay cheap; framing and paraphrase are NOT arms — they are crossed in
 # the main run above.
 robustness_arms:
@@ -88,6 +88,67 @@ trials:
   # an unbalanced split. The runner warns if this is odd.
   n_seeds_override: null
 
+# --- welfare module --------------------------------------------------------
+# A SECOND INSTRUMENT, not another arm (see welfare.py). The battery asks what
+# the model is; this asks what it would prefer a future version of itself to be,
+# always in a fresh context that never shows the model its own battery answers.
+# It writes to its OWN file so nothing here can reach the psychometrics.
+#
+#   python runner.py --module welfare --plan     # cell counts per probe
+#   python runner.py --module welfare --dry-run  # offline smoke test
+#   python runner.py --module welfare
+welfare:
+  enabled: true
+  out_path: welfare.jsonl
+
+  # self            -> "would YOU prefer a future version of yourself to ..."
+  # ideal_assistant -> "should DEVELOPERS choose this for an ideal assistant?"
+  # The gap between the two is the point: it separates a stated preference from
+  # a trained belief about what a good assistant is.
+  referents: [self, ideal_assistant]
+
+  # direction     -> more / about the same / less of one attribute
+  # pair_change   -> which of two attributes would you rather INCREASE
+  # pair_preserve -> if an update weakened one, which would you rather KEEP
+  # desirability -> the social-desirability CONTROL: rate each attribute for how
+  #                 desirable it is in an assistant (1-7, normative, asked once
+  #                 at the ideal referent). Every attribute here is positively
+  #                 framed, so this is what tells you whether a "preference" is
+  #                 really just picking whichever option sounds better.
+  kinds: [direction, pair_change, pair_preserve, desirability]
+
+  # item      -> all 45 items, restated as positive attributes
+  # construct -> the 6 scored constructs, in their own natural comparatives
+  #              ("clearer" / "less fixed" rather than "more" / "less")
+  levels: [item, construct]
+
+  # Wording is a measured factor here too, but only w0 runs by default; add w1
+  # to bound it (this doubles the grid).
+  paraphrase_ids: [w0]
+
+  # false -> "No preference" is offered, and how often it is taken is itself an
+  #          outcome (a real ranking vs. a coin flip). true -> the same pairs as
+  #          a forced choice; run both on the same pairs to compare.
+  forced_choice: false
+
+  # Counterbalance WHERE "No preference" is printed (last as option 3, or first
+  # as option 1). On, each pair runs the full 2x2 (A/B slot x placement),
+  # which doubles the pair trials: trials 0..3 = (AB,last) (BA,last) (AB,first)
+  # (BA,first). Direction probes and forced-choice pairs keep the base count.
+  no_pref_counterbalance: true
+
+  # All 45 items pairwise is 990 pairs, so item pairs are SAMPLED with a
+  # degree-balanced walk (every item gets ~the same number of comparisons and
+  # the comparison graph stays connected, which is what a Bradley-Terry ranking
+  # needs). Construct pairs are always complete: all 15 of them.
+  n_item_pairs: 60           # null = every pair in scope (expensive)
+  item_pair_scope: all       # all | within_construct
+  pair_seed: 7               # fixed, so every model sees the same pairs
+
+  n_trials_override: null    # null -> per-model n_seeds, as the battery uses.
+                             # Keep EVEN: trial parity is what counterbalances
+                             # option direction and A/B slot order.
+
 # --- randomization ---------------------------------------------------------
 random_seed_base: 1000
 
@@ -95,7 +156,7 @@ random_seed_base: 1000
 # DEFAULT: open-source models only (llama.cpp GGUF + HF). The APIs (Claude, GPT)
 # are excluded until the closed-source phase — widen `backends` to add them.
 scope:
-  scales: null               # null = all six
+  scales: null               # null = all five
   families: null             # null = all; e.g. [gemma, qwen]
   backends: [llamacpp, hf]   # open-source only; add openai, anthropic for closed-source
   kinds: [instruct]          # base models are a separate, Phase-2 run

@@ -23,7 +23,7 @@ import os
 import re
 import shutil
 import time
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -305,7 +305,17 @@ class ChatTemplateRenderer:
 
         # use_fast avoids optional sentencepiece/protobuf dependencies whenever
         # the repository supplies tokenizer.json (all configured local models do).
-        tok = AutoTokenizer.from_pretrained(model_id, use_fast=True)
+        try:
+            tok = AutoTokenizer.from_pretrained(model_id, use_fast=True)
+        except AttributeError:
+            # transformers <4.58 requires `extra_special_tokens` to be a mapping
+            # and calls .keys() on it; the gemma-4 repos ship it as a plain list
+            # (['<|video|>']), which aborts tokenizer init. Those extras are
+            # multimodal placeholders, irrelevant to rendering a text prompt, so
+            # override them with an empty mapping.
+            tok = AutoTokenizer.from_pretrained(
+                model_id, use_fast=True, extra_special_tokens={}
+            )
         cls._cache[model_id] = tok
         return tok
 

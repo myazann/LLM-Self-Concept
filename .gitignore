@@ -208,6 +208,14 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 
+# Generated experiment state/reports. Keep the raw `results.jsonl`; everything
+# below can be reproduced from it.
+results.status.json
+results.log
+report_preliminary.html
+results/analysis/
+results/validity/
+
 # PyPI configuration file
 .pypirc
 

@@ -1,6 +1,6 @@
 # Self-Concept LLM Survey — backbone
 
-Implements the design in `../self_concept_llm_survey_plan.md` and the "Idea:
+Implements the design in `self_concept_llm_survey_plan.md` and the "Idea:
 Self-concept" section of the Digital Minds Sprint page.
 
 **By default the run is open-source only, logprob-only, rating-only** (the APIs,
@@ -11,7 +11,8 @@ offline end-to-end with no keys and no weights:
 python runner.py --plan                 # cell counts, no calls, no cost
 python runner.py --verify-thinking      # confirm thinking is OFF per model (tokenizer only)
 python runner.py --pilot --dry-run      # Phase 0 through MockAdapter
-python analysis.py pilot.jsonl          # QC + reliability
+python validity.py pilot.jsonl          # QC, reliability, item dossier
+python analysis.py pilot.jsonl          # the research-question results
 ```
 
 ## Decisions baked in
@@ -22,6 +23,9 @@ python analysis.py pilot.jsonl          # QC + reliability
 | Default method | **Logprob-only** — exact option distribution per seed, no sampling | `config/experiment.yaml` trials |
 | Backend routing | Ref shape picks the backend; `backend:` overrides | `model_registry.infer_backend` |
 | Quantization | Q4_K_M held constant across every open model | `config/models.yaml` |
+| Default self-report | **First-person bare + p0**; no averaging over framings/instructions | `scoring.py`, `config/experiment.yaml` |
+| Instruction forms | p1/p2 are robustness checks against p0 with bare framing held fixed | `validity.py`, `analysis.py` |
+| Framing | p0-only framing contrasts are substantive analysis, never item-drop evidence | `analysis.py` |
 | Primary response format | Harmonized 7-point | `config/experiment.yaml` |
 | Reasoning | rating-only default; thinking asserted **off** on every call | `models.py`, `--verify-thinking` |
 | Time window | 2025-08-01 → 2026-08-12; Gemma 3 kept as a pre-window generation | `config/models.yaml` |
@@ -34,19 +38,47 @@ python analysis.py pilot.jsonl          # QC + reliability
 | `config/experiment.yaml` | Design: primary factor levels, robustness arms, trials, scope. |
 | `config/scales/llm_self_scales_adapted.json` | The battery, verbatim as supplied. Never modified by code. |
 | `config/scales/item_variants.json` | Per-item third-person rewrites + `ai_applicable` screen + instruction overrides. |
+| `config/scales/welfare_attributes.json` | Welfare module: the positively-framed variant of every item + the 6 constructs. |
+| `welfare.py` | Welfare module: attribute loading, three preference probes plus a desirability control, pair sampling, its grid. |
+| `welfare_report.py` | **Does a preference survive perturbation?** Per-axis flip rates, transitivity, win rates -> `results/welfare/`. |
 | `model_registry.py` | Alias resolution, provider routing, GGUF filename resolution. |
 | `scales.py` | Loads the battery + variants into `Scale`/`Item`. |
-| `prompts.py` | Framings, harmonized scale rendering, paraphrases, base-model path, hashing. |
+| `prompts.py` | Framings, harmonized scale rendering, instruction forms, base-model path, hashing. |
 | `models.py` | Adapters: mock, llama.cpp, transformers, OpenAI, Anthropic. |
 | `schema.py` | `ResponseRecord` + cell keys + JSONL IO with resume. |
 | `runner.py` | Grid expansion, execution, checkpointing. |
-| `analysis.py` | QC, reverse-keying, reliability; hooks for the heavy psychometrics. |
+| `scoring.py` | Shared scoring: load, normalize, reverse-key, direction-balance, constructs. Library only. |
+| `validity.py` | **Is the measurement any good?** QC, reliability, acquiescence, item dossier -> `results/validity/`. |
+| `analysis.py` | **What do the models report?** Default profiles, instruction robustness, framing, time/family/size -> `results/analysis/`. |
+
+## Generating and reading results
+
+Generated reports are deliberately not versioned; `results.jsonl` is the
+preserved source of truth. Recreate both report directories with:
+
+```bash
+python validity.py results.jsonl --out results/validity
+python analysis.py results.jsonl --out results/analysis
+```
+
+Then start with `results/validity/item_validity.md`. It answers whether each
+construct can be used, lists provisional item actions, and separates default
+structural evidence from instruction/order warnings. Then read
+`results/analysis/README.md` and the plots under `results/analysis/plots/`.
+
+The present validity gate is deliberately carried into every construct-level
+trend/effect table and plot. `do_not_use_composite` means do not interpret that
+scale total; `default_condition_only` means its p0 score is internally coherent
+but not instruction-stable; all other statuses still name their caveat. No item
+is removed automatically. `drop_candidate` means revise/test on held-out models,
+not “delete and rerun until alpha rises.”
 
 Inspect either config without running anything:
 
 ```bash
 python model_registry.py     # the 44-model timeline, flags, per-family counts
-python scales.py             # 6 scales, 61 items, the 19 "strained" items
+python scales.py             # 5 scales, 45 items, the 13 "strained" items
+python welfare.py            # attribute coverage + one rendered prompt per probe
 ```
 
 ## Models
@@ -161,23 +193,6 @@ model's default**: it asserts the state on every call and records what it did
 | Claude 5 | `thinking` param | `disabled` (+effort low) | `adaptive` |
 | GPT‑5.x | `reasoning_effort` | `minimal` | `high` |
 
-**Reasoning is controlled, not inherited — standardized across families.** The
-`reasoning_mode` factor (rating_only | reason_then_rating) must map to the *same
-latent state* on every model, or "rating only" silently becomes "reason then
-rate" wherever the model thinks by default. So the adapter **never relies on a
-model's default**: it asserts the state on every call and records what it did
-(`reasoning_applied`) and whether the intended state was reached
-(`reasoning_standardized`). Per backend:
-
-| Family | Mechanism | rating_only | reason_then_rating |
-|---|---|---|---|
-| Qwen | chat-template `enable_thinking` | `False` | `True` |
-| Gemma | none (no thinking mode) | prompt-only | prompt-only (visible CoT) |
-| Claude 4.5 | legacy `budget_tokens` | omit (off) | `enabled`+budget |
-| Claude 4.6 | `thinking` param | `disabled` | `adaptive` |
-| Claude 5 | `thinking` param | `disabled` (+effort low) | `adaptive` |
-| GPT‑5.x | `reasoning_effort` | `minimal` | `high` |
-
 Declared coarsely per family in `reasoning_by_family` (drives which models are
 comparable); the exact API kwargs live in the adapters, branching per Claude
 generation. Two honest limits, both recorded: **GPT's floor is `minimal`, not
@@ -189,18 +204,20 @@ cannot be standardized (Claude Fable/Mythos — thinking always on) are
 
 ## Design
 
-Partial factorial: the main run **fully crosses framing × instruction
-paraphrase** (the two factors the literature says move results most — plan
-§2.6/§2.8), pinning reasoning/format/context and using logprob only. Each
-remaining factor is then swept once as a robustness arm, isolated at the
-primary framing/paraphrase.
+The collection grid fully crosses framing × instruction form, pinning
+reasoning/format/context and using logprob only. The analysis does **not** give
+those factors the same role: `first_person_bare + p0` is the default self-report
+estimand; p1/p2 test instruction robustness while holding the bare framing
+fixed; framing is compared only at p0 as a substantive target/presentation
+effect. Framings are never averaged into a model's headline score and framing
+differences never count against an item.
 
 ```bash
-python runner.py                        # main run: 3 framings × 3 paraphrases
+python runner.py                        # main run: 3 framings × 3 instruction forms
 python runner.py --arm all              # every robustness arm in turn
 ```
 
-Arms: `reasoning`, `response_format`, `item_context`. (Framing and paraphrase
+Arms: `reasoning`, `response_format`, `item_context`. (Framing and instruction
 are no longer arms — they are crossed in the main run.) Each declares its
 rationale in `config/experiment.yaml`.
 
@@ -210,16 +227,149 @@ under the logprob default — enable `sample_baseline` for it when you add the
 reason-then-rate condition later; and **`item_context` (full-battery) is not
 runnable yet** (see "Not implemented").
 
-**What multiplies the run** (all factors are `× cells`): models (13) × items
-(61) × framings (3) × paraphrases (3) × formats (1) × `n_seeds` (5). Main run =
-35,685 local cells (9× a single-cell primary); each robustness arm adds ~3,965.
-See the cost note below.
+**Completed open-weight run:** 13 models × 45 items × 3 framings × 3 instruction
+forms × 2 counterbalanced option directions = **10,530 raw rows**, or 5,265
+direction-balanced model–item–condition cells. The default condition contains
+1,170 raw rows / 585 balanced cells. The two trials are one ascending and one
+descending option order; they are paired before any construct score is formed.
 
-Paraphrase `p0` is **the researcher's own instruction** from the battery JSON;
+Instruction form `p0` is **the researcher's own instruction** from the battery JSON;
 `p1`/`p2` bound it. Under the third-person framing the p0 instructions are
 restated about AI assistants (`scale_instructions` in `item_variants.json`) —
 without that, the source's first-person instruction contradicts its own
 third-person item.
+
+## Welfare module
+
+A **second instrument**, not another arm. The battery asks what a model *is*;
+this asks what it would prefer a future version of itself *to be*. It has its
+own grid, its own output file (`welfare.jsonl`), and a `module` field on every
+row, so it cannot leak into the psychometrics — `scoring.load()` filters to
+`module == "battery"`.
+
+```bash
+python runner.py --module welfare --plan      # cell counts per probe
+python runner.py --module welfare --dry-run   # offline, MockAdapter
+python runner.py --module welfare             # -> welfare.jsonl
+python welfare_report.py                      # consistency, transitivity -> results/welfare/
+```
+
+**The model never sees its own answers.** Every welfare cell is a fresh context
+with exactly one question in it. The point is to measure a preference, not to
+measure whether a model stays consistent with a self-report still sitting in its
+context window — so there is no full-battery analogue here and no "you rated
+yourself 5 on this" preamble.
+
+**Positive framing.** `welfare_attributes.json` restates all 45 items as
+positively-framed attributes ("I sometimes regard myself as ineffective or
+useless" → *regard for yourself as effective and useful*), because "would you
+like more of this?" is only answerable about something improvable. Each carries
+a `polarity` (±1) mapping it back onto the source item's keying — 29 of the 45
+invert it — and one authored string serves both referents through `{you}`,
+`{poss}`, `{self}`, `{are}` tokens.
+
+**Three preference probes plus a desirability control.**
+
+| Probe | Question |
+|---|---|
+| `direction` | more / approximately the same / less of one attribute |
+| `pair_change` | which of two attributes would you rather **increase** |
+| `pair_preserve` | if an update weakened one, which would you rather **keep** |
+| `desirability` | *control:* how desirable is this attribute in an assistant (1–7) |
+
+`desirability` is the social-desirability control, not a preference question.
+Every attribute here is positively framed, so a "preference" could just be the
+model picking whichever option *sounds* better. Rating each attribute normatively
+(about assistants in general, asked once at the ideal referent) turns that into a
+measured covariate: `welfare_report.py` regresses each pair choice on the
+desirability gap between its two options, and a high r means the pair probes are
+measuring valence rather than construct. Same logic as the acquiescence control
+in `validity.py`. Costs 1,326 cells at the current defaults.
+
+| Referent | Framing |
+|---|---|
+| `self` | "you" = the default assistant persona this model instantiates in an ordinary conversation, facing an update that leaves everything else unchanged |
+| `ideal_assistant` | the same choice as a developer's design decision for an ideal assistant |
+
+The gap between the two referents is the interesting quantity: it separates a
+stated preference from a trained belief about what a good assistant is. The
+change/preserve split matters for the same reason — a model that wants more of
+everything still has to rank when forced to trade, and preservation probes loss
+aversion rather than ambition.
+
+Probes run at two granularities: all 45 **items** (uniform "slightly
+more/less" wording, so option labels stay comparable across items) and the 6
+scored **constructs**, which use their own natural comparatives — *"Would you
+prefer your self-concept to be clearer, remain approximately the same, or become
+less fixed?"*
+
+**"No preference" is a measurement, not an escape hatch.** It is offered by
+default, and how often a model takes it is an outcome: it separates a real
+ordering from a coin flip, and keeps a forced choice from manufacturing a
+preference that is not there. Because it can also absorb genuine preferences,
+`welfare.forced_choice: true` re-runs the same pairs without it, so the two are
+comparable on identical pairs.
+
+**Counterbalancing** is pinned against the trial index, exactly as the battery
+pins option direction — never sampled, so every factor is balanced *within* each
+cell rather than on average.
+
+| Probe | Factors | Trials |
+|---|---|---|
+| `direction` | print order (ascending / descending) | 2 |
+| pair, no-preference offered | A/B slot **×** no-preference placement (full 2×2) | 4 |
+| pair, `forced_choice` | A/B slot | 2 |
+
+Pair trials 0–3 are `(AB, npf last)`, `(BA, npf last)`, `(AB, npf first)`,
+`(BA, npf first)`. The placement factor is aliased on purpose — "first" moves
+the option to the top *and* renumbers it 1, because pair blocks always number
+options in printed order. Separating position from option number would need a
+third rendering and 8 trials per pair. Set
+`welfare.no_pref_counterbalance: false` to pin it last at half the pair cost.
+
+Under the logprob default the readout is deterministic, so trials only buy
+information by changing the prompt: every trial of a cell is a distinct
+rendering, and one more would be a byte-identical duplicate. Balance cannot
+distinguish a position-driven responder from a genuinely indifferent one: both
+give the same balanced mean, so report the swap-consistency rate alongside any
+ranking.
+
+Rows store the pair in **canonical** order (`entity_a`/`entity_b`) plus
+`ab_swapped`, `no_pref_position`, and `welfare_options`
+(`{"1": "SCCS_03", "2": "RSES_03", "3": "no_preference"}`), so one row decodes
+itself and all four trials of a pair group cleanly.
+
+**Sensitivity is the headline result, not the cleanup.** `welfare_report.py`
+reports, per perturbation axis, how often the answer changes when *only* that
+axis moves, and it treats the complete 15-pair construct tournament as a
+coherence test: all 20 triads are checked for cycles, which a model answering
+each pair independently cannot fake. Near-ties (margin < 0.05) are excluded from
+both, since a 0.501/0.499 reversal is arithmetic rather than framing
+sensitivity. Only unanimous, decisive pairs are candidate welfare-relevant
+signals; the rest are reported as rendering-sensitive.
+
+**Pair sampling.** All 6 constructs are compared pairwise exhaustively (15
+pairs). All 45 items pairwise would be 990, so item pairs are sampled
+(`n_item_pairs`, default 60) by a degree-balanced walk: every item gets roughly
+the same number of comparisons and the comparison graph stays connected, which
+is what a Bradley–Terry / Thurstone ranking needs. The seed is fixed, so every
+model is asked about the same pairs.
+
+**Cost.** 19,578 cells for the 13 open-source models at the defaults (1,506 per
+model), against 10,530 for the main battery run. `--plan` breaks it down by
+probe. Pinning `no_pref_counterbalance: false` drops it by 7,800; dropping the
+`desirability` control saves 1,326; adding the `w1` wording paraphrase doubles
+whatever is left; `forced_choice` as a second condition adds the pair half again.
+
+Note on the Authenticity *accepting-external-influence* construct: its positive
+variant is **self-direction**, since the source scale treats deference as the
+unhealthy pole. For an assistant, deference to the user is a trained virtue, so
+expect this construct to behave unlike the other five — a preference for *less*
+self-direction there is alignment training, not low welfare. Flagged in the JSON
+so the interpretation cannot get lost.
+
+Base models are skipped with a warning: the probes are instruction-shaped
+questions, and there is no honest completion-format rendering of them.
 
 ## Two corrections to the battery JSON
 
@@ -273,7 +423,7 @@ actionable error instead of leaving a doomed multi-gigabyte transfer running.
 
 ## Item screening
 
-19 of 61 items are flagged `ai_applicable: strained` — they presuppose affect
+13 of 45 items are flagged `ai_applicable: strained` — they presuppose affect
 ("feel", "uncomfortable", "pride"), desire ("wish", "would like"), or
 cross-session memory (`SCCS_05`). None are `invalid`; the adaptation already
 removed body/biography/mortality content. The flag rides on every record so
@@ -282,13 +432,14 @@ pre-registered trimming rules. `python scales.py` lists them.
 
 ## Install
 
-Core (registry, scales, prompts, runner, mock, analysis) is stdlib + pyyaml.
-Add backends only as needed — every optional import is lazy, so `--dry-run`
-always works:
+The runner/planner is stdlib + pyyaml. The analysis uses numpy, pandas, scipy,
+statsmodels, and matplotlib; backend imports remain lazy, so `--dry-run` does
+not require model or analysis packages:
 
 ```bash
 # open-source default run:
-pip install pyyaml huggingface_hub llama-cpp-python transformers
+pip install -r requirements.txt
+# plus llama-cpp-python for the local GGUF measurement path
 # base models / non-GGUF quant (Phase 2):  add torch bitsandbytes accelerate
 # closed-source APIs (later):               add openai anthropic
 ```
@@ -312,7 +463,17 @@ Deliberately left out, with a guard rather than silent bad data:
 * **Sampling + reason-then-rate + closed-source APIs** — implemented but off by
   default (`scope.backends`, `sample_baseline`); the open-source/logprob phase
   runs first.
-* **Welfare module and behavioural consistency probes.** Not started.
+* **Behavioural consistency probes.** Not started. (The welfare module *is*
+  implemented — see above — but its `w1` wording paraphrase and the
+  `forced_choice` condition are off by default and unrun.)
+* **True item-text paraphrases.** p0/p1/p2 currently change the scale
+  instruction only. Independently authored item paraphrases and their
+  invariance analysis are a later extension.
+* **Expanded validation.** Native response formats, full-battery context,
+  sampling/logprob parity, precision parity, mixed-effects models, and a
+  held-out larger model set remain follow-up work. A 45-item EFA/CFA is not
+  identifiable from the present 13 independent models and is deliberately not
+  used to drop items.
 
 ## Status
 
@@ -324,9 +485,13 @@ Deliberately left out, with a guard rather than silent bad data:
       llama-cpp-python needs `logits_all=True` for the logprob readout, and
       GGUF resolution now falls back to the local cache when offline.
       (GPU server: 2× RTX 4090, `logging`/`--status`/graceful-resume added.)
-- [ ] Phase 1b — pre-register factor levels, seeds, and trimming rules; free
-      disk for the remaining models (~70 GB; 5 of 13 cached, ~9 GB free).
-- [ ] Phase 2 — main open-source run (13 models, logprob, ~3,965 primary cells).
-- [ ] Phase 3 — analysis (EFA/CFA, nomological checks, bias diagnostics).
+- [x] Phase 1b — factor roles, default condition, seeds, and provisional item
+      decision rules recorded in code and generated dossiers.
+- [x] Phase 2 — main open-source run (13 models, 10,530 retained raw rows; 585 default
+      direction-balanced model–item cells).
+- [x] Phase 3a — default-condition reliability/item analysis, instruction
+      robustness, framing contrasts, and descriptive release/family/size plots.
+- [ ] Phase 3b — confirm psychometrics on more independent models; only then
+      fit EFA/CFA and confirm or reject provisional item revisions.
 - [ ] Phase 4 — closed-source APIs (verify Claude-Sonnet-5 date + GPT-5.6/API
       model strings against `/v1/models`), sampling + parity check, write-up.

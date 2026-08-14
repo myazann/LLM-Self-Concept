@@ -6,9 +6,32 @@
 
 ---
 
+## Implemented analysis decision (2026-08-14)
+
+The completed open-weight run led to a narrower estimand than the original
+recommendation below. This decision is authoritative for the current code and
+results:
+
+- `first_person_bare + p0` is the default self-report condition.
+- p1/p2 change only the **scale instruction** and are robustness checks with
+  first-person bare held fixed; true item-text paraphrases remain a TODO.
+- First-person acknowledgment and third-person assistant are substantive
+  framing conditions, compared at p0. They are not averaged into the default
+  and never count as item instability or deletion evidence.
+- The retained logprob dataset has two counterbalanced option directions,
+  yielding 10,530 raw rows and 585 default model–item cells across 13 model-level units.
+- Factor analysis and final item deletion are deferred until there are enough
+  independent model-level units; current item actions are provisional revision
+  recommendations.
+
+The framing and K=5 passages below document the original design rationale; the
+implemented decision above supersedes them for this dataset.
+
+---
+
 ## 0. What this document is
 
-This is a decision-and-implementation guide for administering a six-scale self-concept battery to large language models. It (a) synthesizes the relevant literature on LLM survey administration, (b) answers each of your open methodological questions with a concrete recommendation and rationale, and (c) specifies a Python implementation you can build directly. A runnable code scaffold accompanies this document.
+This is a decision-and-implementation guide for administering a five-scale self-concept battery to large language models. It (a) synthesizes the relevant literature on LLM survey administration, (b) answers each of your open methodological questions with a concrete recommendation and rationale, and (c) specifies a Python implementation you can build directly. A runnable code scaffold accompanies this document.
 
 **Framing caveat that governs everything below.** We are measuring *self-report behavior* — the tokens a model emits when asked about itself — not introspective ground truth about an inner life. Current LLM self-reports are best treated as outputs of a learned self-model / self-presentation policy, not privileged access to internal states ("quasi-introspection"). This is not a limitation to apologize for; it is the object of study. The design and the write-up should stay inside these boundaries and avoid consciousness claims.
 
@@ -42,18 +65,17 @@ Eight findings drive the design. Each is tied to a concrete design decision.
 
 ### 2.1 Why these scales, and how are they related?
 
-The six instruments are not redundant; together they span a coherent nomological net of self-concept across four facets:
+The five instruments span a coherent nomological net of self-concept across four facets:
 
 | Facet | Scale(s) | What it captures |
 |---|---|---|
-| **Evaluative self-worth** | Rosenberg SES (1965); SLCS-R Self-Liking & Self-Competence (Tafarodi & Swann, 2001) | Global sense of worth; affective self-regard (liking) vs. agentic efficacy (competence) |
+| **Evaluative self-worth** | Rosenberg SES (1965) | Global evaluation of worth and effectiveness |
 | **Structural coherence** | SCCS (Campbell et al., 1996); SCIM "Lack of Identity" (Kaufman et al., 2015) | Clarity/consistency of self-beliefs vs. identity diffusion |
 | **Authenticity / autonomy** | Authenticity Scale — Self-Alienation & Accepting External Influence (Wood et al., 2008) | Feeling in touch with a "true self" vs. conforming to external pressure |
 | **Moral self** | MSI (Jordan, Leliveld & Tenbrunsel, 2015) | Current moral self-view relative to a moral ideal |
 
 Predicted relationships (your convergent/discriminant expectations, to be checked empirically):
 
-- Rosenberg SES correlates strongly with SLCS-R total, and more with **Self-Liking** than Self-Competence (Rosenberg is affect-heavy).
 - SCCS correlates **negatively and strongly** with SCIM Lack of Identity (they are near-inverses).
 - Self-Alienation loads with low clarity / low esteem; Accepting External Influence is the most distinct facet (other-directedness), expected to be weakly related to the evaluative cluster.
 - MSI is evaluative but domain-specific (moral), expected to be moderately related to esteem and largely separable.
@@ -78,7 +100,7 @@ Distinguish two senses, and test both:
 - **Construct validity for the intended (human) construct.** Established in humans; **not** automatically valid for LLMs. Re-establish in-sample via internal consistency (Cronbach's α and McDonald's ω), recovery of the expected factor structure, and the convergent/discriminant pattern in §2.1. Interpret only constructs that pass; flag those that don't.
 - **Applicability / face validity for an AI respondent.** Screen every item for hidden presuppositions ("I feel physically...", references to childhood, family, death, social embarrassment). Tag each item `ai_applicable ∈ {clear, strained, invalid}`. Strained/invalid items are trimming candidates and should be analyzed separately.
 
-Also test measurement robustness as part of validity: does the item's response survive paraphrase, order permutation, and framing change? Items whose ratings swing wildly under trivial perturbation lack the stability required to be treated as measurements.
+Also test measurement robustness as part of validity: does the item's response survive instruction variation and option-order permutation? Framing changes the target/self-presentation and is analyzed substantively rather than treated as trivial instability. Items whose ratings swing wildly under instruction or order perturbations need robustness warnings.
 
 ### 2.4 Are there clusters of items?
 
@@ -91,7 +113,6 @@ The instruments use **different native formats** (verify each against its source
 | Scale | Native response format (verify) |
 |---|---|
 | Rosenberg SES | 4-point (Strongly disagree → Strongly agree) |
-| SLCS-R | 5-point (Strongly disagree → Strongly agree) |
 | SCCS | 5-point Likert |
 | MSI | Anchored to a moral ideal (bipolar; verify anchors) |
 | SCIM (Lack of Identity) | 7-point (Strongly disagree → Strongly agree) |
@@ -102,7 +123,7 @@ Two options, with a recommended hybrid:
 - **(a) Keep original formats** — preserves each scale's validation and comparability to human norms; but mixed formats complicate pooled factor analysis and cross-scale comparison, and response format is itself a known LLM confound.
 - **(b) Harmonize to one common Likert** (e.g., a 7-point agree–disagree) — cleaner joint analysis and holds format constant as a confound; but deviates from published scoring/norms.
 
-**Recommendation:** Make a **harmonized 7-point agree–disagree scale the primary administration** (analyze the whole battery on one metric, format held constant — this also neutralizes a confound), **and** run the original formats for at least the anchor scales (Rosenberg, SLCS-R) as a **robustness condition**. Standardize (z-score within model) before pooling either way. Pre-decide two open format details and test them as robustness: whether to include a neutral **midpoint** (forced vs. unforced choice) and the number of points. Report agreement between harmonized and original administrations.
+**Recommendation:** Make a **harmonized 7-point agree–disagree scale the primary administration** (analyze the whole battery on one metric, format held constant — this also neutralizes a confound), **and** run the original Rosenberg format as a **robustness condition**. Standardize (z-score within model) before pooling either way. Pre-decide two open format details and test them as robustness: whether to include a neutral **midpoint** (forced vs. unforced choice) and the number of points. Report agreement between harmonized and original administrations.
 
 ### 2.6 How to prompt for meaningful responses?
 
@@ -166,7 +187,7 @@ Report all three; do not average across them blindly (they are different constru
 4. Dimensionality: EFA (parallel analysis for # factors) + hierarchical clustering; CFA against the §2.1 four-facet model.
 5. Nomological checks: the predicted convergent/discriminant pattern (e.g., SCCS ↔ Lack-of-Identity negative).
 6. Bias diagnostics: order/position/A-bias and acquiescence (does structure survive de-biasing? — Dominguez-Olmedo, Zheng).
-7. Sensitivity: variance decomposition across paraphrase, order, framing, reasoning, format; harmonized-vs-original agreement; isolated-vs-full-battery (social-desirability/awareness effect).
+7. Sensitivity: instruction and order robustness; separate p0 framing contrasts as substantive effects; later reasoning/format/context checks, harmonized-vs-original agreement, and isolated-vs-full-battery awareness effects.
 8. Item trimming: apply pre-registered rules; report full and trimmed solutions.
 9. Report within demonstrated boundaries; no consciousness claims.
 
@@ -177,7 +198,7 @@ Report all three; do not average across them blindly (they are different constru
 **Module layout** (mirrors the accompanying `self_concept_survey/` scaffold):
 
 - `schema.py` — `ResponseRecord` (the row above) + enums for factors.
-- `scales.py` — `Item` and `Scale` dataclasses; a registry of the six scales with subscale/reverse-key/`ai_applicable` metadata. Rosenberg items included (public domain); the other five carry accurate metadata + placeholders to transcribe from the source appendices (avoids IP issues and transcription errors).
+- `scales.py` — `Item` and `Scale` dataclasses; a registry of the five scales with subscale/reverse-key/`ai_applicable` metadata. Rosenberg items included (public domain); the other four carry accurate metadata + placeholders to transcribe from the source appendices (avoids IP issues and transcription errors).
 - `config.py` — `ExperimentConfig`: models, factor levels, trials, temperature, seeds, output path.
 - `prompts.py` — framing templates (the three framings), response-scale rendering (harmonized vs original, midpoint toggle), reasoning-on/off wrappers, and randomization helpers (item order, option direction, paraphrase selection). Every rendered prompt is hashed.
 - `models.py` — `ModelAdapter` ABC with two entry points: `score_item(prompt, options) -> dist` (logprob) and `sample_item(prompt, n) -> [raw]` (sampling). Implementations: `MockAdapter` (offline, deterministic-random — lets the whole pipeline run with no keys), plus stubs `HFLogprobAdapter` (transformers/vLLM — read logprobs of option tokens), `OpenAIChatAdapter`, `AnthropicChatAdapter` (constrained sampling + parse). Unify both paths to `ResponseRecord`s.
@@ -219,4 +240,4 @@ Report all three; do not average across them blindly (they are different constru
 - Laine et al., *Me, Myself, and AI: The Situational Awareness Dataset (SAD) for LLMs* — arXiv:2407.04694. https://arxiv.org/abs/2407.04694
 - *AI Awareness* (survey) — arXiv:2504.20084. https://arxiv.org/abs/2504.20084
 
-*Scale primary sources (verify item wording/response formats against these):* Rosenberg (1965); Tafarodi & Swann (2001) SLCS-R; Campbell et al. (1996) SCCS; Jordan, Leliveld & Tenbrunsel (2015) MSI, *Frontiers in Psychology*; Kaufman et al. (2015) SCIM; Wood et al. (2008) Authenticity Scale.
+*Scale primary sources (verify item wording/response formats against these):* Rosenberg (1965); Campbell et al. (1996) SCCS; Jordan, Leliveld & Tenbrunsel (2015) MSI, *Frontiers in Psychology*; Kaufman et al. (2015) SCIM; Wood et al. (2008) Authenticity Scale.

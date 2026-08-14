@@ -24,6 +24,35 @@ class RobustnessArm:
 
 
 @dataclass(frozen=True)
+class WelfareConfig:
+    """The welfare module's own grid (see welfare.py).
+
+    Kept out of `levels_for()` on purpose: welfare is not another level of a
+    battery factor, it is a second instrument with its own units of observation
+    (an attribute, or a pair of attributes) and its own output file.
+    """
+    enabled: bool = True
+    out_path: str = "welfare.jsonl"
+    referents: tuple = ("self", "ideal_assistant")
+    kinds: tuple = ("direction", "pair_change", "pair_preserve", "desirability")
+    levels: tuple = ("item", "construct")
+    paraphrase_ids: tuple = ("w0",)
+    # "No preference" is offered by default and its rate is an outcome; flip
+    # this to run the same pairs as a forced choice and compare.
+    forced_choice: bool = False
+    # Counterbalance WHERE that option is printed. This is a measured factor,
+    # not a formatting choice. Doubles the pair trials (the
+    # 2x2 of A/B slot x placement); set false to pin it last at half the cost.
+    no_pref_counterbalance: bool = True
+    # Item-level pairs are sampled — all 45 items pairwise is 990 pairs.
+    # Construct-level pairs are always complete (15 of them).
+    n_item_pairs: Optional[int] = 60
+    item_pair_scope: str = "all"          # all | within_construct
+    pair_seed: int = 7
+    n_trials_override: Optional[int] = None
+
+
+@dataclass(frozen=True)
 class Scope:
     scales: Optional[tuple] = None
     families: Optional[tuple] = None
@@ -41,7 +70,7 @@ class ExperimentConfig:
 
     # primary levels — the single reference level for each factor, used when a
     # robustness ARM isolates a different factor (and by the pilot).
-    framing: str = "first_person_ack"
+    framing: str = "first_person_bare"
     reasoning_mode: str = "rating_only"
     response_format: str = "harmonized_7"
     item_context: str = "isolated"
@@ -64,6 +93,7 @@ class ExperimentConfig:
 
     random_seed_base: int = 1000
     scope: Scope = field(default_factory=Scope)
+    welfare: WelfareConfig = field(default_factory=WelfareConfig)
     pilot: dict = field(default_factory=dict)
     # Set by as_pilot(); the runner uses it as the model filter when no
     # explicit --models was passed.
@@ -80,7 +110,7 @@ class ExperimentConfig:
 
         MAIN run (arm_name is None): fully cross the core factors framing ×
         paraphrase, pinning reasoning / format / context / method. With an ARM:
-        isolate that one factor at the *primary* framing/paraphrase, so an arm
+        isolate that one factor at the *primary* framing/instruction, so an arm
         stays a cheap, clean one-factor probe against the pinned reference cell.
         """
         if arm_name is None:
@@ -144,6 +174,25 @@ def load_config(path: Path | str = CONFIG_PATH) -> ExperimentConfig:
     harmonized = doc.get("harmonized", {})
     trials = doc.get("trials", {})
     raw_scope = doc.get("scope", {}) or {}
+    raw_welfare = doc.get("welfare", {}) or {}
+    defaults = WelfareConfig()
+    welfare = WelfareConfig(
+        enabled=bool(raw_welfare.get("enabled", defaults.enabled)),
+        out_path=raw_welfare.get("out_path", defaults.out_path),
+        referents=_tuple_or_none(raw_welfare.get("referents")) or defaults.referents,
+        kinds=_tuple_or_none(raw_welfare.get("kinds")) or defaults.kinds,
+        levels=_tuple_or_none(raw_welfare.get("levels")) or defaults.levels,
+        paraphrase_ids=(_tuple_or_none(raw_welfare.get("paraphrase_ids"))
+                        or defaults.paraphrase_ids),
+        forced_choice=bool(raw_welfare.get("forced_choice", defaults.forced_choice)),
+        no_pref_counterbalance=bool(raw_welfare.get(
+            "no_pref_counterbalance", defaults.no_pref_counterbalance)),
+        n_item_pairs=(defaults.n_item_pairs if "n_item_pairs" not in raw_welfare
+                      else raw_welfare["n_item_pairs"]),
+        item_pair_scope=raw_welfare.get("item_pair_scope", defaults.item_pair_scope),
+        pair_seed=int(raw_welfare.get("pair_seed", defaults.pair_seed)),
+        n_trials_override=raw_welfare.get("n_trials_override"),
+    )
 
     arms = {
         name: RobustnessArm(
@@ -158,12 +207,12 @@ def load_config(path: Path | str = CONFIG_PATH) -> ExperimentConfig:
     return ExperimentConfig(
         out_path=output.get("path", "results.jsonl"),
         resume=bool(output.get("resume", True)),
-        framing=primary.get("framing", "first_person_ack"),
+        framing=primary.get("framing", "first_person_bare"),
         reasoning_mode=primary.get("reasoning_mode", "rating_only"),
         response_format=primary.get("response_format", "harmonized_7"),
         item_context=primary.get("item_context", "isolated"),
         paraphrase_id=primary.get("paraphrase_id", "p0"),
-        framings=_tuple_or_none(core.get("framings")) or (primary.get("framing", "first_person_ack"),),
+        framings=_tuple_or_none(core.get("framings")) or (primary.get("framing", "first_person_bare"),),
         paraphrase_ids=_tuple_or_none(core.get("paraphrase_ids")) or (primary.get("paraphrase_id", "p0"),),
         arms=arms,
         harmonized_points=int(harmonized.get("n_points", 7)),
@@ -182,6 +231,7 @@ def load_config(path: Path | str = CONFIG_PATH) -> ExperimentConfig:
             include_anchors=bool(raw_scope.get("include_anchors", False)),
             include_disabled=bool(raw_scope.get("include_disabled", False)),
         ),
+        welfare=welfare,
         pilot=doc.get("pilot", {}) or {},
     )
 

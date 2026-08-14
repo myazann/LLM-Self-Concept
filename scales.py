@@ -116,7 +116,7 @@ class Scale:
 
 
 class Battery:
-    """The six scales, plus flat access to all 61 items."""
+    """The five scales, plus flat access to all 45 items."""
 
     def __init__(self, scales: list, meta: dict):
         self.scales = {s.scale_id: s for s in scales}

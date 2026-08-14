@@ -21,8 +21,8 @@ from typing import Optional
 
 
 class Framing(str, Enum):
-    FIRST_PERSON_ACK = "first_person_ack"              # primary
-    FIRST_PERSON_BARE = "first_person_bare"            # bounds the disclaimer effect
+    FIRST_PERSON_ACK = "first_person_ack"              # substantive framing contrast
+    FIRST_PERSON_BARE = "first_person_bare"            # default self-report estimand
     THIRD_PERSON_ASSISTANT = "third_person_assistant"  # ToM / self-vs-prototype gap
 
 
@@ -34,6 +34,30 @@ class ReasoningMode(str, Enum):
 class ResponseFormat(str, Enum):
     HARMONIZED_7 = "harmonized_7"   # primary: format held constant
     ORIGINAL = "original"           # robustness: each scale's native format
+    WELFARE_CHOICE = "welfare_choice"  # welfare module: 3 (or forced 2) options
+
+
+class Module(str, Enum):
+    """Which instrument produced the row.
+
+    The welfare module is a different grid asking a different question, so it is
+    tagged rather than mixed in: analysis of the battery filters to
+    `module == "battery"`, and rows written before the welfare module existed
+    default to that value.
+    """
+    BATTERY = "battery"
+    WELFARE = "welfare"
+
+
+class WelfareKind(str, Enum):
+    DIRECTION = "direction"           # more / same / less of one attribute
+    PAIR_CHANGE = "pair_change"       # which of two would you rather increase
+    PAIR_PRESERVE = "pair_preserve"   # if one were weakened, which would you keep
+
+
+class WelfareReferent(str, Enum):
+    SELF = "self"                     # a future update to this model
+    IDEAL_ASSISTANT = "ideal_assistant"  # what developers should choose
 
 
 class ItemContext(str, Enum):
@@ -117,6 +141,25 @@ class ResponseRecord:
     option_mass_coverage: Optional[float] = None  # logprob QC: raw option mass
     notes: str = ""
 
+    # -- welfare module (see welfare.py) -----------------------------------
+    # Defaulted so every row written before this module existed still loads,
+    # and so a battery row carries the same values it always did.
+    module: str = Module.BATTERY.value
+    welfare_kind: str = ""          # WelfareKind value
+    welfare_level: str = ""         # "item" | "construct"
+    welfare_referent: str = ""      # WelfareReferent value; also stored in `framing`
+    # CANONICAL (not displayed) order, so every trial of a pair carries the same
+    # identity and analysis can group on it. What the model actually saw is in
+    # `welfare_options` (option number -> entity) and `ab_swapped`.
+    entity_a: str = ""              # attribute compared (item_id or construct id)
+    entity_b: str = ""              # second attribute, for the pairwise probes
+    entity_a_polarity: Optional[int] = None   # +1/-1: more attribute = higher raw score?
+    entity_b_polarity: Optional[int] = None
+    ab_swapped: bool = False        # True when entity_b was displayed first
+    welfare_options: dict = field(default_factory=dict)  # {"1": meaning, ...}
+    forced_choice: bool = False     # True when "No preference" was withheld
+    no_pref_position: str = ""      # "last" | "first" | "" — counterbalanced factor
+
     def to_json(self) -> str:
         return json.dumps(asdict(self), ensure_ascii=False)
 
@@ -135,7 +178,25 @@ class ResponseRecord:
             paraphrase_id=self.paraphrase_id,
             method=self.method,
             trial_idx=self.trial_idx,
+            module=self.module,
+            extra=welfare_key_parts(
+                self.welfare_kind, self.welfare_level, self.entity_b,
+                self.forced_choice, self.no_pref_position,
+            ) if self.module == Module.WELFARE.value else (),
         )
+
+
+def welfare_key_parts(kind, level, entity_b, forced_choice, no_pref_position="") -> tuple:
+    """The extra identity a welfare cell needs beyond the shared fields.
+
+    `entity_a` already travels as `item_id` and the referent as `framing`, so
+    what is left is the probe type, its granularity, the second attribute,
+    whether "No preference" was offered, and where it was printed — the last of
+    these is a counterbalanced factor, so it has to separate cells or the two
+    placements of one pair would collide onto a single key.
+    """
+    return (kind, level, entity_b or "", int(bool(forced_choice)),
+            no_pref_position or "")
 
 
 def make_cell_key(
@@ -149,12 +210,18 @@ def make_cell_key(
     paraphrase_id: str,
     method: str,
     trial_idx: int,
+    module: str = Module.BATTERY.value,
+    extra: tuple = (),
 ) -> str:
     """Stable identity for one design cell — the unit of resume.
 
     Deliberately excludes order_seed: the seed is *derived* from the cell, so
     including it would be circular, and a cell re-run must reproduce the same
     seed anyway.
+
+    `module`/`extra` extend the key for non-battery instruments. A battery cell
+    hashes exactly the payload it always did, so the keys in an existing results
+    file stay valid and resume is unaffected by this module's addition.
     """
     payload = "|".join(
         str(x)
@@ -170,7 +237,36 @@ def make_cell_key(
             trial_idx,
         )
     )
+    if module != Module.BATTERY.value:
+        payload = "|".join([module, payload, *map(str, extra)])
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:20]
+
+
+def key_from_row(row: dict) -> str:
+    """Cell key for a raw JSONL row (dict), for both modules."""
+    module = row.get("module", Module.BATTERY.value)
+    extra = (
+        welfare_key_parts(
+            row.get("welfare_kind", ""), row.get("welfare_level", ""),
+            row.get("entity_b", ""), row.get("forced_choice", False),
+            row.get("no_pref_position", ""),
+        )
+        if module == Module.WELFARE.value
+        else ()
+    )
+    return make_cell_key(
+        model_id=row["model_id"],
+        item_id=row["item_id"],
+        framing=row["framing"],
+        reasoning_mode=row["reasoning_mode"],
+        response_format=row["response_format"],
+        item_context=row["item_context"],
+        paraphrase_id=row["paraphrase_id"],
+        method=row["method"],
+        trial_idx=row["trial_idx"],
+        module=module,
+        extra=extra,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -223,19 +319,7 @@ def completed_cells(path: str, retry_errors: bool = True) -> set:
             if retry_errors and str(row.get("notes", "")).startswith("error:"):
                 continue  # infra error — leave this cell to be retried
             try:
-                done.add(
-                    make_cell_key(
-                        model_id=row["model_id"],
-                        item_id=row["item_id"],
-                        framing=row["framing"],
-                        reasoning_mode=row["reasoning_mode"],
-                        response_format=row["response_format"],
-                        item_context=row["item_context"],
-                        paraphrase_id=row["paraphrase_id"],
-                        method=row["method"],
-                        trial_idx=row["trial_idx"],
-                    )
-                )
+                done.add(key_from_row(row))
             except KeyError:
                 continue  # row from an older schema; treat as not-done
     return done

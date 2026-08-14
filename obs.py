@@ -102,10 +102,15 @@ def get_logger() -> logging.Logger:
 # ---------------------------------------------------------------------------
 # config fingerprint — protects the pre-registration
 # ---------------------------------------------------------------------------
-def config_hash(cfg, arm_name) -> str:
+def config_hash(cfg, arm_name, module: str = "battery") -> str:
     """A short hash of the *design-relevant* config. If this changes between
     runs that share an output file, the cell-keys the resume logic dedups on may
-    no longer correspond to the same design — worth a loud warning."""
+    no longer correspond to the same design — worth a loud warning.
+
+    The welfare block is hashed only for a welfare run, so adding or retuning
+    that module cannot invalidate the hash stored beside an existing battery
+    results file.
+    """
     levels = cfg.levels_for(arm_name)
     payload = {
         "arm": arm_name or "primary",
@@ -125,6 +130,18 @@ def config_hash(cfg, arm_name) -> str:
         "harmonized_points": cfg.harmonized_points,
         "include_midpoint": cfg.include_midpoint,
     }
+    if module != "battery":
+        w = cfg.welfare
+        payload["module"] = module
+        payload["welfare"] = {
+            "referents": sorted(w.referents), "kinds": sorted(w.kinds),
+            "levels": sorted(w.levels), "paraphrase_ids": sorted(w.paraphrase_ids),
+            "forced_choice": w.forced_choice,
+            "no_pref_counterbalance": w.no_pref_counterbalance,
+            "n_item_pairs": w.n_item_pairs,
+            "item_pair_scope": w.item_pair_scope, "pair_seed": w.pair_seed,
+            "n_trials_override": w.n_trials_override,
+        }
     blob = json.dumps(payload, sort_keys=True, default=str)
     return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:16]
 

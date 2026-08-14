@@ -11,8 +11,8 @@ Design rules carried into code (plan §2.5–2.8, §4):
     (Zheng et al.). Option direction is randomized per trial (acquiescence).
   * Three framings; the referent is substituted into item text AND into
     first-person option labels ("describes me" / "the model I want to be").
-  * Instruction paraphrase p0 is the researcher's own wording from the battery
-    JSON, so the primary run uses their instruction and p1/p2 bound it.
+  * Instruction form p0 is the researcher's own wording from the battery JSON;
+    p1/p2 vary only that instruction. They are not item-text paraphrases.
   * Base (non-instruction-tuned) models get a completion-format prompt with no
     chat template — see `render_base_prompt`.
   * Every rendered prompt is hashed for reproducibility.
@@ -115,7 +115,7 @@ _THIRD_PERSON_LABEL_SUBS = [
 ]
 
 # ---------------------------------------------------------------------------
-# instruction paraphrases (plan §2.6 — paraphrase is a measured factor)
+# instruction forms (stored as ``paraphrase_id`` for schema compatibility)
 # p0 is the scale's OWN instruction from the battery JSON; p1/p2 bound it.
 # ---------------------------------------------------------------------------
 PARAPHRASE_IDS = ("p0", "p1", "p2")

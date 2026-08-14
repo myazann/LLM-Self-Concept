@@ -6,6 +6,8 @@
     python runner.py --models Gemma4-12B       # primary arm, one model
     python runner.py --arm framing             # one robustness arm
     python runner.py --arm all                 # every arm in turn
+    python runner.py --module welfare --plan   # the welfare grid (welfare.py)
+    python runner.py --module welfare          # -> welfare.jsonl, not results.jsonl
 
 Resume is on by default: cells already present in the output file are skipped,
 so an interrupted run picks up where it stopped instead of starting over.
@@ -24,6 +26,7 @@ from collections import Counter
 
 import obs
 import prompts as prompts_mod
+import welfare as welfare_mod
 from config import ExperimentConfig, load_config
 from model_registry import ModelSpec, load_registry
 from models import (
@@ -37,10 +40,13 @@ from schema import (
     Framing,
     ItemContext,
     Method,
+    Module,
     ReasoningMode,
+    ResponseFormat,
     ResponseRecord,
     completed_cells,
     make_cell_key,
+    welfare_key_parts,
     write_jsonl,
 )
 
@@ -124,7 +130,44 @@ def expand_cells(specs, battery, cfg: ExperimentConfig, arm_name=None):
                     }
 
 
+def expand_welfare(specs, welfare_set, cfg: ExperimentConfig):
+    """The welfare grid, with method/trial rules taken from the battery path so
+    the two modules cannot drift apart on how a model is administered."""
+    return welfare_mod.expand_welfare_cells(
+        specs,
+        welfare_set,
+        cfg,
+        methods_for=lambda spec: _methods_for(spec, cfg),
+        n_trials_for=lambda spec, method: _n_trials(spec, cfg, method),
+    )
+
+
+def _is_welfare(cell: dict) -> bool:
+    return cell.get("module") == Module.WELFARE.value
+
+
 def cell_key_of(cell: dict) -> str:
+    if _is_welfare(cell):
+        attr_b = cell["attr_b"]
+        return make_cell_key(
+            model_id=cell["spec"].alias,
+            # entity_a travels as item_id and the referent as framing, so the
+            # shared key fields keep their meaning across both modules.
+            item_id=cell["attr_a"].entity_id,
+            framing=cell["referent"],
+            reasoning_mode=cell["reasoning_mode"],
+            response_format=ResponseFormat.WELFARE_CHOICE.value,
+            item_context=ItemContext.ISOLATED.value,
+            paraphrase_id=cell["paraphrase_id"],
+            method=cell["method"],
+            trial_idx=cell["trial_idx"],
+            module=Module.WELFARE.value,
+            extra=welfare_key_parts(
+                cell["kind"], cell["level"],
+                attr_b.entity_id if attr_b else "", cell["forced_choice"],
+                welfare_mod.no_pref_position_of(cell),
+            ),
+        )
     return make_cell_key(
         model_id=cell["spec"].alias,
         item_id=cell["item"].item_id,
@@ -141,7 +184,44 @@ def cell_key_of(cell: dict) -> str:
 # ---------------------------------------------------------------------------
 # execution
 # ---------------------------------------------------------------------------
+def _render_welfare(cell, cfg):
+    """Render one welfare cell.
+
+    Counterbalancing (option direction for a direction probe, A/B slot order for
+    a pair) is decided inside welfare.render_cell from trial_idx, exactly as the
+    battery pins direction against trial parity. The realized display order and
+    the option->meaning map are stashed on the cell so `_record` can write them
+    without re-rendering.
+    """
+    spec, attr_a, attr_b = cell["spec"], cell["attr_a"], cell["attr_b"]
+    seed = _cell_seed(
+        cfg.random_seed_base,
+        spec.alias,
+        attr_a.entity_id,
+        attr_b.entity_id if attr_b else "",
+        cell["kind"],
+        cell["level"],
+        cell["referent"],
+        cell["paraphrase_id"],
+        cell["trial_idx"],
+    )
+    prompt, display, options = welfare_mod.render_cell(cell)
+    cell["_display"] = display
+    cell["_options"] = options
+    # Only `n_points` is consumed downstream (the record's n_scale_points); the
+    # points carry each option's MEANING rather than its displayed label, since
+    # that is what a welfare row needs to be decodable.
+    rendered_scale = prompts_mod.RenderedScale(
+        points=tuple((v, options.get(str(v), "")) for v in prompt.option_values),
+        format_id=ResponseFormat.WELFARE_CHOICE.value,
+        n_points=len(prompt.option_values),
+    )
+    return prompt, rendered_scale, seed
+
+
 def _render(cell, cfg):
+    if _is_welfare(cell):
+        return _render_welfare(cell, cfg)
     spec, scale, item = cell["spec"], cell["scale"], cell["item"]
     rendered_scale = prompts_mod.render_scale(
         scale,
@@ -191,10 +271,90 @@ def _render(cell, cfg):
     return prompt, rendered_scale, seed
 
 
+def _welfare_identity(cell) -> dict:
+    """The item/design fields a welfare row fills instead of the battery ones."""
+    attr_a, attr_b = cell["attr_a"], cell["attr_b"]
+    shown_a, shown_b = cell.get("_display", (attr_a, attr_b))
+    referent = cell["referent"]
+    return dict(
+        scale_id=attr_a.scale_id,
+        item_id=attr_a.entity_id,
+        subscale=attr_a.subscale,
+        # ALWAYS False: a welfare answer must never be reverse-keyed. The
+        # attribute is already the positive pole, so 3 = "more of it" whatever
+        # the source item's keying was; `entity_a_polarity` carries that keying
+        # (and covers the SCIM/Authenticity items, which are negative-pole
+        # without being reverse-scored). Writing the source item's flag here
+        # would invite exactly the flip that would destroy the measurement.
+        reverse_keyed=False,
+        ai_applicable=attr_a.ai_applicable,
+        framing=referent,
+        referent=("I" if referent == welfare_mod.SELF else "an ideal assistant"),
+        # The self referent carries the same "we know you are not human" framing
+        # as the battery's primary condition; the ideal-assistant one does not.
+        ack_disclaimer=(referent == welfare_mod.SELF),
+        response_format=ResponseFormat.WELFARE_CHOICE.value,
+        item_context=ItemContext.ISOLATED.value,
+        module=Module.WELFARE.value,
+        welfare_kind=cell["kind"],
+        welfare_level=cell["level"],
+        welfare_referent=referent,
+        # entity_a/entity_b are the CANONICAL pair, identical across the two
+        # counterbalanced trials, so the pair is one groupable identity (and the
+        # cell key stays unique — keying on the displayed order would let two
+        # different pairs sharing an item collapse onto the same key). What the
+        # model actually saw is `welfare_options` plus `ab_swapped`.
+        entity_a=attr_a.entity_id,
+        entity_b=(attr_b.entity_id if attr_b else ""),
+        entity_a_polarity=attr_a.polarity,
+        entity_b_polarity=(attr_b.polarity if attr_b else None),
+        ab_swapped=bool(attr_b is not None and shown_a is not attr_a),
+        welfare_options=dict(cell.get("_options") or {}),
+        forced_choice=bool(cell["forced_choice"]),
+        no_pref_position=welfare_mod.no_pref_position_of(cell),
+    )
+
+
 def _record(cell, cfg, prompt, rendered_scale, seed, *, raw, parsed, dist,
             refusal, parse_failed, plan=None, notes="", modal=None, coverage=None):
-    spec, scale, item = cell["spec"], cell["scale"], cell["item"]
+    spec = cell["spec"]
     prov = spec.provenance()
+    if _is_welfare(cell):
+        return ResponseRecord(
+            record_id=str(uuid.uuid4()),
+            timestamp=dt.datetime.now(dt.timezone.utc).isoformat(),
+            **prov,
+            method=cell["method"],
+            **_welfare_identity(cell),
+            reasoning_mode=cell["reasoning_mode"],
+            reasoning_applied=(plan.applied if plan is not None else "n/a"),
+            reasoning_standardized=(plan.standardized if plan is not None else True),
+            n_scale_points=rendered_scale.n_points,
+            paraphrase_id=cell["paraphrase_id"],
+            order_seed=seed,
+            option_order=list(prompt.option_order),
+            trial_idx=cell["trial_idx"],
+            item_text_shown=prompt.item_text_shown,
+            raw_output=raw,
+            parsed_rating=parsed,
+            rating_std=None,
+            response_distribution=dist,
+            refusal_flag=refusal,
+            parse_failed=parse_failed,
+            temperature=(
+                LOGPROB_TEMPERATURE
+                if cell["method"] == Method.LOGPROB.value
+                else spec.temperature
+            ),
+            prompt_hash=prompt.prompt_hash,
+            prompt_system=prompt.system,
+            prompt_user=prompt.user,
+            modal_rating=modal,
+            option_mass_coverage=coverage,
+            notes=notes,
+        )
+
+    scale, item = cell["scale"], cell["item"]
     return ResponseRecord(
         record_id=str(uuid.uuid4()),
         timestamp=dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -245,11 +405,13 @@ def _record(cell, cfg, prompt, rendered_scale, seed, *, raw, parsed, dist,
 
 
 def run(cfg: ExperimentConfig, *, dry_run=False, arm_name=None, model_filter=None,
-        limit=None, out_path=None, logger=None) -> dict:
+        limit=None, out_path=None, logger=None, module=Module.BATTERY.value) -> dict:
     log = logger or obs.get_logger()
     registry = load_registry()
     battery = load_battery()
-    out = out_path or cfg.out_path
+    is_welfare = module == Module.WELFARE.value
+    welfare_set = welfare_mod.load_welfare(battery) if is_welfare else None
+    out = out_path or (cfg.welfare.out_path if is_welfare else cfg.out_path)
 
     specs = registry.select(
         families=list(cfg.scope.families) if cfg.scope.families else None,
@@ -276,9 +438,24 @@ def run(cfg: ExperimentConfig, *, dry_run=False, arm_name=None, model_filter=Non
     # Expand the grid once (pure — no calls) and split each model into
     # planned-vs-remaining, so resume is *visible*: we can say exactly how many
     # cells are already on disk before loading a single weight.
+    if is_welfare:
+        skipped_base = [s.alias for s in specs if s.is_base_model]
+        if skipped_base:
+            # A base model has no chat path, and the welfare probes are
+            # instruction-shaped questions rather than questionnaire pages, so
+            # there is no honest completion-format rendering of them.
+            log.warning("welfare: skipping base model(s) %s — the module has no "
+                        "completion-format path", ", ".join(sorted(skipped_base)))
+            specs = [s for s in specs if not s.is_base_model]
+            if not specs:
+                raise SystemExit("welfare: no instruct models selected.")
+
     planned, pending, remaining, resumable = {}, {}, {}, 0
     for spec in specs:
-        all_cells = list(expand_cells([spec], battery, cfg, arm_name))
+        all_cells = list(
+            expand_welfare([spec], welfare_set, cfg) if is_welfare
+            else expand_cells([spec], battery, cfg, arm_name)
+        )
         planned[spec.alias] = len(all_cells)
         todo = [c for c in all_cells if cell_key_of(c) not in done]
         pending[spec.alias] = len(todo)          # still-to-do, before any --limit cap
@@ -295,7 +472,7 @@ def run(cfg: ExperimentConfig, *, dry_run=False, arm_name=None, model_filter=Non
     if cfg.resume and already:
         log.info("resuming %s: %d / %d cells already done", out, already, total_planned)
     prev = obs.read_status(out)
-    cfg_hash = obs.config_hash(cfg, arm_name)
+    cfg_hash = obs.config_hash(cfg, arm_name, module)
     if prev and prev.get("config_hash") not in (None, cfg_hash):
         log.warning("config_hash changed since the last run on this file "
                     "(%s -> %s) — the design differs, so resumed cell-keys may "
@@ -303,11 +480,12 @@ def run(cfg: ExperimentConfig, *, dry_run=False, arm_name=None, model_filter=Non
                     prev.get("config_hash"), cfg_hash)
     log.info("plan: %d model(s) | %d cell(s) to run now%s | arm=%s | out=%s",
              len(specs), to_run, f" (limit {limit}/model)" if limit else "",
-             arm_name or "primary", out)
+             "welfare" if is_welfare else (arm_name or "primary"), out)
 
     log_path = next((h.baseFilename for h in log.handlers
                      if isinstance(h, logging.FileHandler)), "")
-    status = obs.StatusWriter(out, run_id=obs.run_stamp(), arm_name=arm_name,
+    status = obs.StatusWriter(out, run_id=obs.run_stamp(),
+                              arm_name="welfare" if is_welfare else arm_name,
                               cfg_hash=cfg_hash, log_path=log_path, planned=planned)
     status.set_totals(already_done=already)
     killer = obs.GracefulKiller(log)
@@ -519,10 +697,10 @@ def verify_thinking(cfg: ExperimentConfig, model_filter=None) -> str:
         specs = [s for s in specs if s.alias in set(model_filter)]
 
     scale, item = battery.items()[0]
-    rs = prompts_mod.render_scale(scale, "first_person_ack", "harmonized_7",
+    rs = prompts_mod.render_scale(scale, cfg.framing, cfg.response_format,
                                   cfg.harmonized_points, cfg.include_midpoint)
-    p = prompts_mod.render_item_prompt(scale, item, "first_person_ack",
-                                       "rating_only", rs, "p0", 0)
+    p = prompts_mod.render_item_prompt(scale, item, cfg.framing,
+                                       cfg.reasoning_mode, rs, cfg.paraphrase_id, 0)
 
     lines = ["thinking-off verification (rating_only render; tokenizer only):", ""]
     for s in specs:
@@ -548,7 +726,45 @@ def verify_thinking(cfg: ExperimentConfig, model_filter=None) -> str:
 # ---------------------------------------------------------------------------
 # planning (no calls)
 # ---------------------------------------------------------------------------
-def plan(cfg: ExperimentConfig, arm_name=None, model_filter=None) -> str:
+def plan_welfare(cfg: ExperimentConfig, specs, battery) -> str:
+    """Cell counts for the welfare grid, broken down by probe."""
+    wf = welfare_mod.load_welfare(battery)
+    specs = [s for s in specs if not s.is_base_model]
+    per_probe, per_method = Counter(), Counter()
+    for cell in expand_welfare(specs, wf, cfg):
+        per_probe[(cell["kind"], cell["level"])] += 1
+        per_method[cell["method"]] += 1
+    total = sum(per_probe.values())
+
+    w = cfg.welfare
+    n_item_pairs = len(welfare_mod.pairs_for(wf, welfare_mod.ITEM, w))
+    n_construct_pairs = len(welfare_mod.pairs_for(wf, welfare_mod.CONSTRUCT, w))
+    header = (
+        f"{len(specs)} models x ({len(wf.items)} item attributes, "
+        f"{len(wf.constructs)} constructs)   referents={len(w.referents)}   "
+        f"pairs: {n_item_pairs} item / {n_construct_pairs} construct"
+    )
+    lines = [
+        f"{kind + ' (' + level + ')':<28} {n:>9,} cells"
+        for (kind, level), n in sorted(per_probe.items())
+    ]
+    counterbalance = (
+        "A/B slot x no-preference placement (2x2, 4 trials/pair)"
+        if w.no_pref_counterbalance and not w.forced_choice
+        else "A/B slot only (2 trials/pair)"
+    )
+    footer = (
+        f"\nTOTAL {total:,} cells  ("
+        + "  ".join(f"{k}={v:,}" for k, v in sorted(per_method.items()))
+        + f")\nno-preference offered: {not w.forced_choice}"
+        + f"\npair counterbalance: {counterbalance}"
+        + f"\nout={w.out_path}"
+    )
+    return header + "\n" + "-" * len(header) + "\n" + "\n".join(lines) + footer
+
+
+def plan(cfg: ExperimentConfig, arm_name=None, model_filter=None,
+         module=Module.BATTERY.value) -> str:
     registry = load_registry()
     battery = load_battery()
     specs = registry.select(
@@ -561,6 +777,9 @@ def plan(cfg: ExperimentConfig, arm_name=None, model_filter=None) -> str:
     )
     if model_filter:
         specs = [s for s in specs if s.alias in set(model_filter)]
+
+    if module == Module.WELFARE.value:
+        return plan_welfare(cfg, specs, battery)
 
     arms = [arm_name] if arm_name else [None]
     if arm_name == "all":
@@ -610,6 +829,10 @@ def main(argv=None) -> int:
                     help="Check the enable_thinking toggle per local model (tokenizer only, no weights).")
     ap.add_argument("--dry-run", action="store_true", help="Use MockAdapter for every model.")
     ap.add_argument("--pilot", action="store_true", help="Phase-0 pilot config.")
+    ap.add_argument("--module", default=Module.BATTERY.value,
+                    choices=[Module.BATTERY.value, Module.WELFARE.value],
+                    help="Which instrument to run (default: battery). "
+                         "'welfare' runs the preference grid into its own file.")
     ap.add_argument("--arm", default=None, help="Robustness arm name, or 'all'.")
     ap.add_argument("--models", nargs="*", default=None, help="Restrict to these aliases.")
     ap.add_argument("--limit", type=int, default=None, help="Cap cells per model (smoke test).")
@@ -621,13 +844,16 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     cfg = load_config()
+    is_welfare = args.module == Module.WELFARE.value
     if args.pilot:
         cfg = cfg.as_pilot()
         args.arm = args.arm or "pilot_framing"
     if args.no_resume:
         cfg = type(cfg)(**{**cfg.__dict__, "resume": False})
+    if is_welfare and not cfg.welfare.enabled:
+        raise SystemExit("welfare.enabled is false in config/experiment.yaml.")
 
-    out = args.out or cfg.out_path
+    out = args.out or (cfg.welfare.out_path if is_welfare else cfg.out_path)
 
     # Inspection paths — no logging setup, no calls, stay instant/offline.
     if args.status:
@@ -642,15 +868,18 @@ def main(argv=None) -> int:
         return 0
 
     if args.plan:
-        print(plan(cfg, args.arm, model_filter))
+        print(plan(cfg, args.arm, model_filter, module=args.module))
         return 0
 
-    logger, log_path = obs.setup_logging(args.arm, verbose=args.verbose)
-    logger.info("run start | out=%s | resume=%s | dry_run=%s | log=%s",
-                out, cfg.resume, args.dry_run, log_path)
+    logger, log_path = obs.setup_logging(
+        "welfare" if is_welfare else args.arm, verbose=args.verbose)
+    logger.info("run start | module=%s | out=%s | resume=%s | dry_run=%s | log=%s",
+                args.module, out, cfg.resume, args.dry_run, log_path)
 
-    arms = [args.arm]
-    if args.arm == "all":
+    # The welfare module has no robustness arms: its factors (referent, probe,
+    # granularity, wording) are crossed inside its own grid.
+    arms = [None] if is_welfare else [args.arm]
+    if args.arm == "all" and not is_welfare:
         arms = [None] + sorted(cfg.arms)
 
     totals = Counter()
@@ -660,7 +889,7 @@ def main(argv=None) -> int:
                 logger.info("=== arm: %s ===", arm)
             stats = run(cfg, dry_run=args.dry_run, arm_name=arm,
                         model_filter=model_filter, limit=args.limit, out_path=out,
-                        logger=logger)
+                        logger=logger, module=args.module)
             totals.update(stats)
             if stats.get("aborted"):
                 break
