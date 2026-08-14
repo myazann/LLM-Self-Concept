@@ -20,6 +20,7 @@ plus a `desirability` control that rates each attribute's surface valence, so a
     python -m welfare.run --dry-run      # offline, MockAdapter
     python -m welfare.run                # -> welfare.jsonl
     python -m welfare.report             # answerability, position bias, preference
+    python -m welfare.analysis           # what it says: ranking, framing, figures
 
 Layout:
 
@@ -30,6 +31,11 @@ Layout:
     grid.py         pair sampling, order counterbalancing, the runnable Instrument
     run.py          CLI
     report.py       does a stated preference survive the way it was asked?
+    analysis.py     what it says once it has survived — ranking, framing, figures
+    plots.py        the figures analysis.py writes
+
+`report.py` audits an administration and `analysis.py` reads it; they share their
+frames, so the audit's verdict and the substantive result cannot drift apart.
 
 Design lives in `config/welfare.yaml`. The survey battery is a separate
 instrument in `survey/`; the two share only `core/`.

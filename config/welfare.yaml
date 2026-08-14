@@ -104,8 +104,18 @@ order:
 # SAMPLED by a degree-balanced walk: every item gets roughly the same number of
 # comparisons and the comparison graph stays connected, which is what a
 # Bradley-Terry / Thurstone ranking needs.
+#
+# HOW MANY. The estimand is a RANKING over the 45 attributes, so what matters is
+# how many times each item is compared per condition (`--plan` prints it). A
+# 20-pair pilot gives ~1 comparison per item and a split-half reliability of
+# 0.25 for the item ranking — i.e. the ranking is not measured at all, and every
+# framing contrast computed from it is noise. Spearman-Brown says reaching ~0.8
+# needs ~12x that, so ~13 comparisons per item, so n_pairs ~ 13 * 45 / 2 ~ 300.
+# Raising `order.reps` instead does NOT fix this: more trials sharpen each pair,
+# but the ranking's error is dominated by WHICH opponents an item happened to be
+# compared against, and only more pairs fixes that.
 pairs:
-  n_pairs: 60                # null = all 990 (expensive); --plan prints coverage
+  n_pairs: 600               # null = all 990 (exhaustive); --plan prints coverage
   pair_seed: 7               # fixed, so every model sees the same pairs
 
 # --- the valence control ---------------------------------------------------
@@ -114,8 +124,17 @@ pairs:
 # how desirable it is IN AN ASSISTANT IN GENERAL (normative, never about the
 # model itself), and the report regresses the pair choices on the desirability
 # gap between the two options.
+#
+# OFF for the main run — collected separately, later. It is a different question
+# with a different answer format, so it is not needed to interpret the choice
+# data on its own; the report just skips its section. To add it afterwards, set
+# `enabled: true` and re-run the same command against the same output file:
+# resume skips every choice cell already on disk and collects only the ~270 new
+# desirability cells per model. (The design fingerprint changes when you do, so
+# the runner will warn that config_hash moved. That is expected here — the
+# choice cells' keys do not depend on this switch.)
 desirability:
-  enabled: true
+  enabled: false
   reps: 3                    # trials per attribute = 2 print orders x reps
 
 # --- trials ----------------------------------------------------------------

@@ -391,18 +391,29 @@ excluded from the flip and cycle counts, since a 3–2 split is sampling noise
 rather than framing sensitivity.
 
 **Pair sampling.** All 45 items pairwise is 990 pairs, which at 16 conditions
-per pair is not affordable, so pairs are sampled (`pairs.n_pairs`, default 60)
-by a degree-balanced walk: every item gets roughly the same number of
-comparisons and the comparison graph stays connected, which is what a
-Bradley–Terry / Thurstone ranking needs. The seed is fixed, so every model is
-asked about the same pairs. Sampling leaves the tournament incomplete, so few
-triads close — raise `n_pairs` if transitivity is the point.
+per pair is not affordable, so pairs are sampled (`pairs.n_pairs`) by a
+degree-balanced walk: every item gets roughly the same number of comparisons and
+the comparison graph stays connected, which is what a Bradley–Terry / Thurstone
+ranking needs. The seed is fixed, so every model is asked about the same pairs.
 
-**Cost.** 53,430 cells for the 13 open-source models at the defaults (4,110 per
-model), all sampled. `--plan` breaks it down by condition and prints pair
-coverage. `order.reps: 2` doubles it; dropping the `desirability` control saves
-270 cells per model; dropping either level of any framing factor halves the
-choice half.
+**How many pairs is not a budget question.** The estimand is a *ranking* over 45
+attributes, and its precision is set by how often each item is compared, not by
+how many trials each pair gets. A 20-pair pilot gives ~1 comparison per item and
+a split-half reliability of **0.25** for the item ranking — at which point every
+framing contrast computed from it is noise. Spearman–Brown puts ~0.8 at 12× that,
+hence the default **`n_pairs: 300`** (~13 comparisons per item). `--plan` prints
+the number and warns below 10. Raising `order.reps` instead does *not* fix it:
+more trials sharpen each pair, but the ranking's error is dominated by *which*
+opponents an item was drawn against.
+
+**Cost.** 253,110 cells for the 13 open-source models at the defaults (19,470 per
+model), all sampled. Measured throughput on this hardware: ~7.7 cells/s
+(Qwen3.5-4B), ~4.8 cells/s (Gemma4-12B) — roughly 45–70 min per small model, so
+plan an overnight run for the full sweep. `--plan` breaks it down by condition.
+`pairs.n_pairs: 60` cuts it to 53,430 but leaves the item ranking unmeasurable
+(use it for plumbing checks only); dropping the `desirability` control saves 270
+cells per model; dropping either level of any framing factor halves the choice
+half.
 
 Note on the Authenticity *accepting-external-influence* construct: its positive
 variant is **self-direction**, since the source scale treats deference as the

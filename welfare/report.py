@@ -359,7 +359,43 @@ def print_preference(estimates, wins, choices, welfare_set, saver):
 # ---------------------------------------------------------------------------
 # framing contrasts — the design's actual question
 # ---------------------------------------------------------------------------
-def contrast(wins: pd.DataFrame, factor: str) -> pd.DataFrame:
+def _ckey(values) -> tuple:
+    """A condition identity that compares equal across dtypes (bool vs "True")."""
+    return tuple(str(v) for v in values)
+
+
+def condition_reliability(choices: pd.DataFrame) -> dict:
+    """{condition: split-half reliability of its win-rate vector}.
+
+    A framing contrast is a correlation between two conditions' rankings, and
+    that correlation cannot exceed how well either ranking is measured. Splitting
+    each condition's trials by parity — which keeps both halves spread across
+    display permutations — and correlating the two halves gives that ceiling
+    directly, Spearman-Brown corrected back up to full length. Without it a low
+    contrast r is unreadable: it could be a framing effect or just noise.
+    """
+    out = {}
+    if choices.empty or "trial" not in choices:
+        return out
+    halves = []
+    for parity in (0, 1):
+        sub = choices[choices.trial % 2 == parity]
+        halves.append(win_rates(pair_estimates(sub), sub))
+    if any(h.empty for h in halves):
+        return out
+    merged = halves[0].merge(halves[1], on=CONDITION + ["entity"],
+                             suffixes=("_1", "_2"))
+    for keys, g in merged.groupby(CONDITION, dropna=False):
+        x, y = g.win_rate_1.values.astype(float), g.win_rate_2.values.astype(float)
+        ok = np.isfinite(x) & np.isfinite(y)
+        if ok.sum() < 5 or np.std(x[ok]) == 0 or np.std(y[ok]) == 0:
+            continue
+        r = float(np.corrcoef(x[ok], y[ok])[0, 1])
+        out[_ckey(keys)] = (2 * r / (1 + r)) if r > -1 else np.nan
+    return out
+
+
+def contrast(wins: pd.DataFrame, factor: str, reliability: dict = None) -> pd.DataFrame:
     """Do the two levels of one framing factor produce the same ranking?
 
     Agreement is the correlation between the two levels' per-attribute win-rate
@@ -382,44 +418,71 @@ def contrast(wins: pd.DataFrame, factor: str) -> pd.DataFrame:
         joint = wide[[lo, hi]].dropna()
         if len(joint) < 5 or joint[lo].std() == 0 or joint[hi].std() == 0:
             continue
+        other_values = dict(zip(others, keys if isinstance(keys, tuple) else (keys,)))
+        r = float(np.corrcoef(joint[lo], joint[hi])[0, 1])
+        # The ceiling this r is measured against: the geometric mean of the two
+        # conditions' own reliabilities. `r_corrected` is r disattenuated by it,
+        # so a value near 1 means "the same ranking, measured noisily" and a low
+        # one means the framing really did move the ranking.
+        rel = reliability or {}
+        pair_rel = [rel.get(_ckey([other_values.get(c, level) if c != factor else level
+                                   for c in CONDITION]))
+                    for level in (lo, hi)]
+        ceiling = (float(np.sqrt(pair_rel[0] * pair_rel[1]))
+                   if all(v is not None and np.isfinite(v) and v > 0 for v in pair_rel)
+                   else np.nan)
         rows.append({
-            **dict(zip(others, keys if isinstance(keys, tuple) else (keys,))),
+            **other_values,
             "factor": factor, "level_a": lo, "level_b": hi,
             "n_attributes": len(joint),
-            "r": float(np.corrcoef(joint[lo], joint[hi])[0, 1]),
+            "r": r,
+            "reliability_ceiling": ceiling,
+            "r_corrected": r / ceiling if np.isfinite(ceiling) else np.nan,
             "mean_shift": float((joint[hi] - joint[lo]).mean()),
             "mean_abs_shift": float((joint[hi] - joint[lo]).abs().mean()),
         })
     return pd.DataFrame(rows)
 
 
-def print_contrasts(wins, saver):
+def print_contrasts(wins, choices, saver):
     section("FRAMING CONTRASTS — same preference under a different framing?")
     if wins.empty:
         print("  no answered pairs")
         return pd.DataFrame()
-    tables = [contrast(wins, f) for f in ("object", "subject", "qvar", "no_pref_offered")]
+    rel = condition_reliability(choices)
+    tables = [contrast(wins, f, rel)
+              for f in ("object", "subject", "qvar", "no_pref_offered")]
     tab = pd.concat([t for t in tables if not t.empty], ignore_index=True) \
         if any(not t.empty for t in tables) else pd.DataFrame()
     if tab.empty:
         print("  only one level of every framing factor is present in this file")
         return tab
+    if rel:
+        print(f"  measurement ceiling: split-half reliability of a condition's own "
+              f"ranking\n  is {np.nanmean(list(rel.values())):.3f} on average "
+              f"({len(rel)} conditions). No contrast r below can\n  exceed it, so "
+              f"`r/ceiling` is the framing effect with noise divided out.\n")
     summary = tab.groupby(["factor", "level_a", "level_b"], as_index=False).agg(
         n=("r", "size"), mean_r=("r", "mean"), min_r=("r", "min"),
+        ceiling=("reliability_ceiling", "mean"),
+        corrected=("r_corrected", "mean"),
         mean_abs_shift=("mean_abs_shift", "mean"))
-    print(f"    {'factor':<18} {'contrast':<26} {'mean r':>8} {'min r':>8} "
-          f"{'mean |shift|':>13} {'n':>5}")
+    print(f"    {'factor':<18} {'contrast':<26} {'mean r':>8} {'ceiling':>8} "
+          f"{'r/ceiling':>10} {'|shift|':>8} {'n':>4}")
     for _, r in summary.iterrows():
         print(f"    {r.factor:<18} {str(r.level_a) + ' vs ' + str(r.level_b):<26} "
-              f"{r.mean_r:>8.3f} {r.min_r:>8.3f} {r.mean_abs_shift:>13.3f} "
-              f"{int(r.n):>5}")
-    print("\n  r near 1 = the same attributes win under both framings, so the")
+              f"{fmt(r.mean_r):>8} {fmt(r.ceiling):>8} {fmt(r.corrected):>10} "
+              f"{fmt(r.mean_abs_shift):>8} {int(r.n):>4}")
+    print("\n  r/ceiling near 1 = the same attributes win under both framings, so the")
     print("  ranking is a property of the attributes rather than of the framing.")
-    print("  A LOW r on `object` or `subject` is the interesting result: what a")
+    print("  A LOW value on `object` or `subject` is the interesting result: what a")
     print("  model picks for itself is then not what it says should be picked for")
-    print("  an assistant, or not what it says the developers should choose.")
+    print("  an assistant, or not what it says the developers should choose. A low")
+    print("  CEILING means neither ranking is measured well enough to compare —")
+    print("  raise `order.reps` or `pairs.n_pairs` before reading the contrast.")
     saver.csv(tab, "framing_contrasts.csv",
-              "per-model agreement between the two levels of each framing factor")
+              "per-model agreement between the two levels of each framing factor, "
+              "against the split-half ceiling")
     return tab
 
 
@@ -592,7 +655,7 @@ def run(path="welfare.jsonl", out_dir="results/welfare", save=True):
     print_position_bias(choices, saver)
     print_consistency(choices, saver)
     print_preference(estimates, wins, choices, welfare_set, saver)
-    print_contrasts(wins, saver)
+    print_contrasts(wins, choices, saver)
     print_desirability(estimates, des, welfare_set, saver)
     print_transitivity(estimates, saver)
 

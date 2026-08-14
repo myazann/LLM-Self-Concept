@@ -66,8 +66,10 @@ class WelfareConfig(RunConfig):
 
     # -- pairs --------------------------------------------------------------
     # All 45 items pairwise is 990 pairs; at 16 conditions per pair that is not
-    # affordable, so pairs are sampled degree-balanced across all scales.
-    n_pairs: Optional[int] = 60
+    # affordable, so pairs are sampled degree-balanced across all scales. The
+    # default is sized for a MEASURABLE item ranking (~13 comparisons per item);
+    # see the derivation in config/welfare.yaml.
+    n_pairs: Optional[int] = 300
     pair_seed: int = 7
 
     # -- the valence control -----------------------------------------------

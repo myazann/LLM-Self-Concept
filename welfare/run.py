@@ -67,11 +67,20 @@ def plan(cfg: WelfareConfig, model_filter=None) -> str:
 
     with_np = trials_per_cell(True, cfg)
     without_np = trials_per_cell(False, cfg)
+    # The item ranking's precision is driven by how often each item is compared,
+    # not by how many trials each pair gets, so it is called out here rather than
+    # left to be discovered in the report's reliability ceiling.
+    per_item = 2 * cov["n_pairs"] / max(len(wf.items), 1)
+    warning = ("" if per_item >= 10 else
+               f"\n  WARNING: ~{per_item:.1f} comparisons per item is thin for a "
+               f"ranking over {len(wf.items)} attributes.\n  Expect a low "
+               f"split-half ceiling in the report; raise pairs.n_pairs.")
     footer = (
         f"\nTOTAL {total:,} cells, all sampled (no logprob path in this module)"
         f"\ntrials per pair-cell: {with_np} with 'No preference' "
         f"({len(display_permutations(3))} orders x {cfg.reps}), "
         f"{without_np} without ({len(display_permutations(2))} orders x {cfg.reps})"
+        f"\ncomparisons per item, per condition: ~{per_item:.1f}{warning}"
         f"\norder: {cfg.order_mode}   system framing: {cfg.system_framing}"
         f"\nout={cfg.out_path}"
     )
