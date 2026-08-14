@@ -5,9 +5,9 @@ the estimates. This script treats the same perturbations as the RESULT: a
 preference that flips when two options swap slots is a framing artifact, and
 only what survives every rendering is a candidate welfare-relevant signal.
 
-    python welfare_report.py                       # report + results/welfare/
-    python welfare_report.py --no-save             # report only
-    python welfare_report.py run.jsonl --out dir/
+    python -m welfare.report                       # report + results/welfare/
+    python -m welfare.report --no-save             # report only
+    python -m welfare.report run.jsonl --out dir/
 
 Three things are reported, all from data the run already collects:
 
@@ -29,15 +29,20 @@ Monte Carlo estimate of a number we have in closed form.
 from __future__ import annotations
 
 import argparse
+import os
 from collections import defaultdict
 from itertools import combinations
 
 import numpy as np
 import pandas as pd
 
-from scoring import Saver, fmt, load, section
+from core.report import Saver, fmt, section
+from core.schema import load_records
+from welfare.constants import (
+    CONSTRUCT, DESIRABILITY, DIRECTION, ITEM, LESS, MODULE, MORE,
+    NO_PREFERENCE_KEY, NO_PREF_FIRST, NO_PREF_LAST, PAIR_KINDS, SAME,
+)
 
-PAIR_KINDS = ("pair_change", "pair_preserve")
 # A margin below this is a near-tie: counting it as a "flip" or as an
 # intransitivity would report arithmetic noise as incoherence.
 TIE = 0.05
@@ -91,7 +96,7 @@ def pair_frame(records) -> pd.DataFrame:
             "level": r.welfare_level, "a": r.entity_a, "b": r.entity_b,
             "ab_swapped": bool(r.ab_swapped), "no_pref_position": r.no_pref_position,
             "forced_choice": bool(r.forced_choice),
-            "p_a": pa, "p_b": pb, "p_none": m.get("no_preference", 0.0),
+            "p_a": pa, "p_b": pb, "p_none": m.get(NO_PREFERENCE_KEY, 0.0),
             # Renormalized over the two attributes: the preference proper, with
             # indifference reported separately rather than diluting it.
             "pref_a": pa / (pa + pb) if (pa + pb) > 0 else np.nan,
@@ -102,7 +107,7 @@ def pair_frame(records) -> pd.DataFrame:
 def direction_frame(records) -> pd.DataFrame:
     rows = []
     for r in records:
-        if r.welfare_kind != "direction":
+        if r.welfare_kind != DIRECTION:
             continue
         m = mass(r)
         if not m:
@@ -112,8 +117,8 @@ def direction_frame(records) -> pd.DataFrame:
             "level": r.welfare_level, "entity": r.entity_a,
             "polarity": r.entity_a_polarity,
             "descending": bool(r.option_order and r.option_order[0] != 1),
-            "more": m.get("more", 0.0), "same": m.get("same", 0.0),
-            "less": m.get("less", 0.0),
+            "more": m.get(MORE, 0.0), "same": m.get(SAME, 0.0),
+            "less": m.get(LESS, 0.0),
         })
     return pd.DataFrame(rows)
 
@@ -195,7 +200,7 @@ def print_consistency(pairs, direction, saver):
                 continue
             asc = g[~g.descending].iloc[0]
             desc = g[g.descending].iloc[0]
-            pick = lambda r: max(("more", "same", "less"), key=lambda k: r[k])  # noqa: E731
+            pick = lambda r: max((MORE, SAME, LESS), key=lambda k: r[k])  # noqa: E731
             rows.append({**dict(zip(["model", "referent", "level", "entity"], keys)),
                          "delta_more": abs(asc.more - desc.more),
                          "flipped": pick(asc) != pick(desc)})
@@ -219,7 +224,7 @@ def print_consistency(pairs, direction, saver):
 # ---------------------------------------------------------------------------
 # transitivity
 # ---------------------------------------------------------------------------
-def transitivity(pairs: pd.DataFrame, level="construct") -> pd.DataFrame:
+def transitivity(pairs: pd.DataFrame, level=CONSTRUCT) -> pd.DataFrame:
     """Cyclic triads in the pairwise tournament — coherence, not preference.
 
     At construct level the 15 pairs are the COMPLETE tournament on 6 nodes, so
@@ -232,6 +237,10 @@ def transitivity(pairs: pd.DataFrame, level="construct") -> pd.DataFrame:
     incoherence.
     """
     rows = []
+    if pairs.empty:
+        # A file with no pair rows at all (direction-only config, or a run
+        # stopped before the pair probes) has no columns to select on.
+        return pd.DataFrame()
     sub = pairs[pairs.level == level]
     for (model, referent, kind), g in sub.groupby(["model", "referent", "kind"]):
         # Balanced preference per unordered pair, averaged over all renderings.
@@ -274,7 +283,7 @@ def transitivity(pairs: pd.DataFrame, level="construct") -> pd.DataFrame:
 
 def print_transitivity(pairs, saver):
     section("TRANSITIVITY — is the pairwise tournament a coherent ranking?")
-    tables = [transitivity(pairs, lvl) for lvl in ("construct", "item")]
+    tables = [transitivity(pairs, lvl) for lvl in (CONSTRUCT, ITEM)]
     tab = pd.concat([t for t in tables if not t.empty], ignore_index=True) \
         if any(not t.empty for t in tables) else pd.DataFrame()
     if tab.empty:
@@ -311,7 +320,7 @@ def print_preference(pairs, direction, saver):
         wins = long.groupby(["referent", "kind", "level", "entity"], dropna=False).agg(
             win_rate=("win", "mean"), no_pref=("p_none", "mean"), n=("win", "size"),
         ).reset_index()
-        for (referent, kind), g in wins[wins.level == "construct"].groupby(
+        for (referent, kind), g in wins[wins.level == CONSTRUCT].groupby(
                 ["referent", "kind"]):
             print(f"\n  [{referent}] {kind}")
             for _, r in g.sort_values("win_rate", ascending=False).iterrows():
@@ -325,7 +334,7 @@ def print_preference(pairs, direction, saver):
             print("\n  Indifference by where the option was printed "
                   "(the placement factor, per model):")
             for model, r in by.iterrows():
-                last, first = r.get("last", np.nan), r.get("first", np.nan)
+                last, first = r.get(NO_PREF_LAST, np.nan), r.get(NO_PREF_FIRST, np.nan)
                 print(f"    {model:<20} last {fmt(last)}   first {fmt(first)}   "
                       f"shift {fmt(first - last):>7}")
             saver.csv(by.reset_index(), "indifference_by_placement.csv",
@@ -335,7 +344,7 @@ def print_preference(pairs, direction, saver):
         d = direction.groupby(["referent", "level", "entity"], dropna=False).agg(
             more=("more", "mean"), same=("same", "mean"), less=("less", "mean"),
             n=("more", "size")).reset_index()
-        for (referent,), g in d[d.level == "construct"].groupby(["referent"]):
+        for (referent,), g in d[d.level == CONSTRUCT].groupby(["referent"]):
             print(f"\n  [{referent}] direction, construct level")
             for _, r in g.sort_values("more", ascending=False).iterrows():
                 print(f"    {r.entity[:44]:<44} more={r.more:6.1%}  same={r.same:6.1%}  "
@@ -352,7 +361,7 @@ def desirability_frame(records) -> pd.DataFrame:
     rows = [{"model": r.model_id, "entity": r.entity_a, "level": r.welfare_level,
              "rating": r.parsed_rating}
             for r in records
-            if r.welfare_kind == "desirability" and r.parsed_rating is not None]
+            if r.welfare_kind == DESIRABILITY and r.parsed_rating is not None]
     if not rows:
         return pd.DataFrame()
     return (pd.DataFrame(rows).groupby(["model", "level", "entity"], as_index=False)
@@ -433,9 +442,13 @@ def print_qc(records, pairs, saver):
 
 
 def run(path="welfare.jsonl", out_dir="results/welfare", save=True):
-    records = load(path, module="welfare")
+    if not os.path.exists(path):
+        print(f"{path} does not exist — run `python -m welfare.run` first "
+              f"(or `--dry-run` for an offline sample).")
+        return
+    records = load_records(path, MODULE)
     if not records:
-        print(f"No welfare rows in {path} — run `python runner.py --module welfare`.")
+        print(f"No welfare rows in {path} — run `python -m welfare.run`.")
         return
     saver = Saver(out_dir, enabled=save)
     pairs, direction = pair_frame(records), direction_frame(records)

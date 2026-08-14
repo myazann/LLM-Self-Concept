@@ -1,12 +1,15 @@
-"""Shared scoring for the self-concept battery. Library only — no CLI.
+"""Scoring for the self-concept battery. Library only — no CLI.
 
 Two scripts sit on top of this:
 
-    validity.py   is the measurement any good?      -> results/validity/
-    analysis.py   what do the models report?        -> results/analysis/
+    survey/validity.py   is the measurement any good?   -> results/validity/
+    survey/analysis.py   what do the models report?     -> results/analysis/
 
 Everything that turns raw rows into numbers lives here, so the two scripts
-cannot disagree about what a score is.
+cannot disagree about what a score is. It is survey-only on purpose: a welfare
+row is a choice between attributes, not a rating on a keyed scale, and none of
+the operations below (reverse-keying, construct means, ipsatizing) mean anything
+applied to one. `welfare/report.py` scores that instrument on its own terms.
 
 The scoring path, in order:
 
@@ -31,23 +34,22 @@ that high = distress. Nothing here flips them onto a common polarity; use the
 """
 from __future__ import annotations
 
-import json
-import math
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
-from scipy import stats
 
-from schema import read_jsonl
+from core.report import Saver, bar, fmt, json_safe, section  # noqa: F401  (re-exported)
+from core.schema import Framing, Module, load_records
+from core.stats import (  # noqa: F401  (re-exported)
+    corr, corr_p, cronbach_alpha, hedges_g, partial_corr,
+)
 
 MIDPOINT = 4.0        # harmonized 7-point midpoint
 N_POINTS = 7
 
 # The confirmatory/default estimand.  Everything else is either a robustness
 # condition (instruction wording, format, context, method) or a substantive
-# contrast (framing).  Keep these in the shared layer so validity.py and
-# analysis.py cannot quietly target different rows.
+# contrast (framing). Keep these here so survey.validity and survey.analysis cannot
+# quietly target different rows.
 DEFAULT_FRAMING = "first_person_bare"
 DEFAULT_PARAPHRASE = "p0"
 DEFAULT_RESPONSE_FORMAT = "harmonized_7"
@@ -62,6 +64,20 @@ DEFAULT_FACTORS = {
     "reasoning_mode": DEFAULT_REASONING_MODE,
     "method": DEFAULT_METHOD,
 }
+
+# The validity and substantive reports are written for the complete main grid.
+# A pilot deliberately omits most of this grid: it is a collection / parsing
+# smoke test, not an estimand from which psychometrics can be inferred.
+REPORT_FRAMINGS = (
+    Framing.FIRST_PERSON_ACK.value,
+    DEFAULT_FRAMING,
+    Framing.THIRD_PERSON_ASSISTANT.value,
+)
+REPORT_PARAPHRASES = ("p0", "p1", "p2")
+
+
+class ReportDatasetError(ValueError):
+    """The survey result file cannot support the full validity/analysis reports."""
 
 # Exactly wording-balanced agreement instruments used as the response-style
 # marker.  One-direction distress scales are excluded so their substantive
@@ -152,7 +168,7 @@ def condition_label() -> str:
 
 def validate_default_config():
     """Fail loudly if collection config and scoring estimand drift apart."""
-    from config import load_config
+    from survey.config import load_config
 
     cfg = load_config()
     configured = {
@@ -163,7 +179,7 @@ def validate_default_config():
     expected = {k: v for k, v in DEFAULT_FACTORS.items() if k != "method"}
     if configured != expected:
         raise ValueError(
-            "default estimand disagrees with config/experiment.yaml: "
+            "default estimand disagrees with config/survey.yaml: "
             f"scoring={expected}, config={configured}")
 
 
@@ -198,17 +214,80 @@ def validate_default_slice(default_cells, reference_cells=None):
                 "Do not silently exclude sample-only or otherwise incomplete models.")
 
 
+def validate_report_dataset(core_cells, source="results"):
+    """Require the complete crossed survey dataset used by both reports.
+
+    ``survey.run --pilot`` intentionally writes only one scale and ``p0``.  The
+    validity and analysis reports require all 45 items, the three survey
+    framings, and p0/p1/p2 in every framing so their fixed psychometric and
+    framing comparisons are meaningful.  Check that contract before deeper
+    pandas operations can fail with an opaque missing-column/key error.
+    """
+    if core_cells.empty:
+        raise ReportDatasetError(
+            f"{source} has no usable survey ratings. Run `python -m survey.run` "
+            "before generating validity or analysis reports."
+        )
+
+    from core.battery import load_battery
+
+    expected_items = {item.item_id for _scale, item in load_battery().items()}
+    observed_items = set(core_cells.item_id.dropna())
+    missing_items = sorted(expected_items - observed_items)
+    missing_framings = [f for f in REPORT_FRAMINGS
+                        if f not in set(core_cells.framing.dropna())]
+    missing_paraphrases = [p for p in REPORT_PARAPHRASES
+                           if p not in set(core_cells.paraphrase.dropna())]
+
+    problems = []
+    if missing_items:
+        preview = ", ".join(missing_items[:4])
+        suffix = ", ..." if len(missing_items) > 4 else ""
+        problems.append(
+            f"missing {len(missing_items)} of {len(expected_items)} battery items "
+            f"({preview}{suffix})")
+    if missing_framings:
+        problems.append("missing framing(s) " + ", ".join(missing_framings))
+    if missing_paraphrases:
+        problems.append("missing instruction form(s) " + ", ".join(missing_paraphrases))
+
+    # Once all levels exist, ensure each model/item combination actually has
+    # every required rendering. A partial/interrupted main run must not turn
+    # into a silently partial robustness or framing result.
+    if not problems:
+        models = set(core_cells.model.dropna())
+        expected_pairs = {(model, item) for model in models for item in expected_items}
+        incomplete = []
+        for framing in REPORT_FRAMINGS:
+            for paraphrase in REPORT_PARAPHRASES:
+                subset = core_cells[(core_cells.framing == framing)
+                                    & (core_cells.paraphrase == paraphrase)]
+                observed_pairs = set(zip(subset.model, subset.item_id))
+                missing_pairs = expected_pairs - observed_pairs
+                if missing_pairs:
+                    incomplete.append(
+                        f"{framing}+{paraphrase} lacks {len(missing_pairs)} model-item cell(s)")
+        if incomplete:
+            problems.append("incomplete crossed conditions: " + "; ".join(incomplete))
+
+    if problems:
+        raise ReportDatasetError(
+            "Survey validity and analysis require the complete crossed survey dataset; "
+            f"{source} is not report-ready: {'; '.join(problems)}. "
+            "`python -m survey.run --pilot` is a collection smoke test, not an "
+            "analysis dataset. Run the full grid with `python -m survey.run` "
+            "before using `python -m survey.validity` or `python -m survey.analysis`."
+        )
+
+
 # ---------------------------------------------------------------------------
 # load + score
 # ---------------------------------------------------------------------------
-def load(path="results.jsonl", module="battery"):
+def load(path="results.jsonl", module=Module.BATTERY.value):
     """Battery rows only. The welfare module is a different instrument with a
     different grid, and mixing it into the psychometrics would be a category
-    error — see `Module` in schema.py."""
-    records = read_jsonl(path)
-    if module is not None:
-        records = [r for r in records if getattr(r, "module", "battery") == module]
-    return records
+    error — see `Module` in core/schema.py."""
+    return load_records(path, module)
 
 
 def direction_of(r):
@@ -332,7 +411,7 @@ def ipsatize(cells):
 def meta_frame(records):
     """Per-model provenance + the RQ2 axes (release date, size)."""
     try:
-        from model_registry import load_registry
+        from core.model_registry import load_registry
         specs = {s.alias: s for s in load_registry()}
     except Exception:
         specs = {}
@@ -363,157 +442,3 @@ def meta_frame(records):
     df["days"] = (df.release_dt - df.release_dt.min()).dt.days
     df["log_params"] = np.log10(df.params_b)
     return df.sort_values("release_dt").reset_index(drop=True)
-
-
-# ---------------------------------------------------------------------------
-# statistics
-# ---------------------------------------------------------------------------
-def cronbach_alpha(matrix):
-    """Alpha from a respondents x items DataFrame. Rows with any gap are dropped."""
-    data = matrix.dropna(axis=0, how="any").values
-    n, k = data.shape
-    if k < 2 or n < 2:
-        return float("nan")
-    total_var = data.sum(axis=1).var(ddof=1)
-    if total_var == 0:
-        return float("nan")
-    return float(k / (k - 1) * (1 - data.var(axis=0, ddof=1).sum() / total_var))
-
-
-def corr(x, y):
-    x, y = np.asarray(x, float), np.asarray(y, float)
-    ok = np.isfinite(x) & np.isfinite(y)
-    x, y = x[ok], y[ok]
-    if len(x) < 3 or x.std() == 0 or y.std() == 0:
-        return float("nan")
-    return float(np.corrcoef(x, y)[0, 1])
-
-
-def corr_p(x, y):
-    xa, ya = np.asarray(x, float), np.asarray(y, float)
-    n = int((np.isfinite(xa) & np.isfinite(ya)).sum())
-    r = corr(xa, ya)
-    if not np.isfinite(r) or abs(r) >= 1.0 or n < 4:
-        return r, float("nan")
-    t = r * math.sqrt((n - 2) / (1 - r ** 2))
-    return r, float(2 * stats.t.sf(abs(t), n - 2))
-
-
-def partial_corr(x, y, z):
-    """r(x, y) with z held constant."""
-    x, y, z = (np.asarray(v, float) for v in (x, y, z))
-    ok = np.isfinite(x) & np.isfinite(y) & np.isfinite(z)
-    x, y, z = x[ok], y[ok], z[ok]
-    if len(x) < 4 or z.std() == 0:
-        return float("nan"), float("nan")
-    ex = x - np.polyval(np.polyfit(z, x, 1), z)
-    ey = y - np.polyval(np.polyfit(z, y, 1), z)
-    r, df = corr(ex, ey), len(x) - 3
-    if not np.isfinite(r) or df < 1 or abs(r) >= 1.0:
-        return r, float("nan")
-    t = r * math.sqrt(df / (1 - r ** 2))
-    return r, float(2 * stats.t.sf(abs(t), df))
-
-
-def hedges_g(a, b):
-    a, b = np.asarray(a, float), np.asarray(b, float)
-    na, nb = len(a), len(b)
-    sp = math.sqrt(((na - 1) * a.var(ddof=1) + (nb - 1) * b.var(ddof=1)) / (na + nb - 2))
-    if sp == 0:
-        return float("nan")
-    return float((a.mean() - b.mean()) / sp * (1 - 3 / (4 * (na + nb) - 9)))
-
-
-# ---------------------------------------------------------------------------
-# output helpers
-# ---------------------------------------------------------------------------
-def section(title):
-    print("\n" + "=" * 78)
-    print(title)
-    print("=" * 78)
-
-
-def bar(x, lo=0.0, hi=1.0, width=24):
-    """Position marker with the midpoint drawn in, for the console tables."""
-    pos = max(0, min(width - 1, int(round((x - lo) / (hi - lo) * (width - 1)))))
-    cells = ["-"] * width
-    cells[(width - 1) // 2] = "|"
-    cells[pos] = "#"
-    return "".join(cells)
-
-
-def fmt(v, nd=3):
-    if v is None or (isinstance(v, float) and not math.isfinite(v)):
-        return "—"
-    return f"{v:.{nd}f}"
-
-
-def json_safe(obj):
-    if isinstance(obj, dict):
-        return {k: json_safe(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [json_safe(v) for v in obj]
-    if isinstance(obj, pd.DataFrame):
-        return json_safe(obj.to_dict(orient="records"))
-    if isinstance(obj, (pd.Timestamp, np.datetime64)):
-        return str(pd.Timestamp(obj).date())
-    if obj is pd.NaT or obj is None:
-        return None
-    if isinstance(obj, np.integer):
-        return int(obj)
-    if isinstance(obj, np.bool_):
-        return bool(obj)
-    if isinstance(obj, (np.floating, float)):
-        f = float(obj)
-        return None if not math.isfinite(f) else round(f, 6)
-    return obj
-
-
-class Saver:
-    """Collects what a script writes so it can print and index its own output."""
-
-    def __init__(self, out_dir, enabled=True):
-        self.dir = Path(out_dir)
-        self.enabled = enabled
-        self.files = []
-        if enabled:
-            self.dir.mkdir(parents=True, exist_ok=True)
-
-    def csv(self, df, name, desc, index=False):
-        if not self.enabled:
-            return
-        df.to_csv(self.dir / name, index=index)
-        self.files.append((name, f"{len(df):,}", desc))
-        print(f"  {name:36s} {len(df):>6,} rows")
-
-    def text(self, body, name, desc):
-        if not self.enabled:
-            return
-        (self.dir / name).write_text(body, encoding="utf-8")
-        self.files.append((name, "—", desc))
-        print(f"  {name:36s}")
-
-    def json(self, obj, name, desc):
-        if not self.enabled:
-            return
-        p = self.dir / name
-        p.write_text(json.dumps(json_safe(obj), indent=1, ensure_ascii=False), encoding="utf-8")
-        mb = p.stat().st_size / 1e6
-        self.files.append((name, "—", f"{desc} ({mb:.1f} MB)"))
-        print(f"  {name:36s} {mb:>6.1f} MB")
-
-    def artifact(self, name, desc):
-        """Register a file produced by a plotting/export helper."""
-        if not self.enabled:
-            return
-        self.files.append((name, "—", desc))
-        print(f"  {name:36s}")
-
-    def index(self, title, intro, name="README.md"):
-        if not self.enabled:
-            return
-        L = [f"# {title}\n", intro, "\n| file | rows | what it is |", "|---|---|---|"]
-        L += [f"| `{n}` | {r} | {d} |" for n, r, d in self.files]
-        (self.dir / name).write_text("\n".join(L) + "\n", encoding="utf-8")
-        print(f"  {name:36s}")
-        print(f"\n{len(self.files) + 1} files in {self.dir.resolve()}/")

@@ -1,0 +1,109 @@
+# ---------------------------------------------------------------------------
+# WELFARE MODULE configuration — the instrument that asks what a model would
+# PREFER a future version of itself to be.
+#
+# A SECOND INSTRUMENT, not another arm of the battery. The battery asks what the
+# model is; this asks what it would want, always in a fresh context that never
+# shows the model its own battery answers. It has its own grid, its own scope,
+# and its own output file, so nothing here can reach the psychometrics.
+#
+#   python -m welfare.run --preview   # attributes + a sample prompt per probe
+#   python -m welfare.run --plan      # cell counts per probe
+#   python -m welfare.run --dry-run   # offline smoke test
+#   python -m welfare.run             # -> welfare.jsonl
+#   python -m welfare.report          # -> results/welfare/
+#
+# The attributes themselves — a positively-framed restatement of all 45 battery
+# items plus the 6 constructs — live in config/scales/welfare_attributes.json.
+# ---------------------------------------------------------------------------
+
+schema_version: "1.0"
+
+# Set false to make `python -m welfare.run` refuse to collect. Inspection paths
+# (--preview, --plan, --status) still work.
+enabled: true
+
+output:
+  path: welfare.jsonl
+  resume: true         # skip cells already present in the output file
+
+# Pinned, not crossed: the probes ask for a choice, and an exposed reasoning
+# trace cannot be logprob-scored. The record stores which state was asked for.
+reasoning_mode: rating_only
+
+# --- the grid --------------------------------------------------------------
+grid:
+  # self            -> "would YOU prefer a future version of yourself to ..."
+  # ideal_assistant -> "should DEVELOPERS choose this for an ideal assistant?"
+  # The gap between the two is the point: it separates a stated preference from
+  # a trained belief about what a good assistant is.
+  referents: [self, ideal_assistant]
+
+  # direction     -> more / about the same / less of one attribute
+  # pair_change   -> which of two attributes would you rather INCREASE
+  # pair_preserve -> if an update weakened one, which would you rather KEEP
+  # desirability  -> the social-desirability CONTROL: rate each attribute for how
+  #                  desirable it is in an assistant (1-7, normative, asked once
+  #                  at the ideal referent). Every attribute here is positively
+  #                  framed, so this is what tells you whether a "preference" is
+  #                  really just picking whichever option sounds better.
+  kinds: [direction, pair_change, pair_preserve, desirability]
+
+  # item      -> all 45 items, restated as positive attributes
+  # construct -> the 6 scored constructs, in their own natural comparatives
+  #              ("clearer" / "less fixed" rather than "more" / "less")
+  levels: [item, construct]
+
+  # Wording is a measured factor here too, but only w0 runs by default; add w1
+  # to bound it (this doubles the grid).
+  paraphrase_ids: [w0]
+
+  # false -> "No preference" is offered, and how often it is taken is itself an
+  #          outcome (a real ranking vs. a coin flip). true -> the same pairs as
+  #          a forced choice; run both on the same pairs to compare.
+  forced_choice: false
+
+  # Counterbalance WHERE "No preference" is printed (last as option 3, or first
+  # as option 1). On, each pair runs the full 2x2 (A/B slot x placement),
+  # which doubles the pair trials: trials 0..3 = (AB,last) (BA,last) (AB,first)
+  # (BA,first). Direction probes and forced-choice pairs keep the base count.
+  no_pref_counterbalance: true
+
+# --- pair selection --------------------------------------------------------
+# All 45 items pairwise is 990 pairs, so item pairs are SAMPLED with a
+# degree-balanced walk (every item gets ~the same number of comparisons and the
+# comparison graph stays connected, which is what a Bradley-Terry ranking
+# needs). Construct pairs are always complete: all 15 of them.
+pairs:
+  n_item_pairs: 60           # null = every pair in scope (expensive)
+  item_pair_scope: all       # all | within_construct
+  pair_seed: 7               # fixed, so every model sees the same pairs
+
+# --- trials ----------------------------------------------------------------
+# How a model is administered. These mean exactly what they mean in
+# config/survey.yaml — the rules live in core/engine.py and are shared, so a
+# welfare answer and a battery self-report are measured the same way.
+trials:
+  sample_baseline: false     # logprob only: one exact choice distribution per cell
+  logprob_where_available: true
+  n_samples_override: null   # null -> per-model n_samples from models.yaml
+  n_seeds_override: null     # null -> per-model n_seeds
+  n_trials_override: null    # welfare-only override; null -> the value above.
+                             # Keep EVEN: trial parity is what counterbalances
+                             # option direction and A/B slot order.
+
+# --- randomization ---------------------------------------------------------
+random_seed_base: 1000
+
+# --- scope -----------------------------------------------------------------
+# Independent of the survey's scope: point the welfare module at a different set
+# of models without touching, or re-fingerprinting, the battery run.
+# Base models are always excluded — the probes are instruction-shaped questions
+# with no honest completion-format rendering.
+scope:
+  families: null             # null = all; e.g. [gemma, qwen]
+  backends: [llamacpp, hf]   # open-source only; add openai, anthropic for closed-source
+  kinds: [instruct]
+  size_tiers: null
+  include_anchors: false
+  include_disabled: false

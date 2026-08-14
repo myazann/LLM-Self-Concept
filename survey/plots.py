@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from scoring import LABELS, POLARITY
+from survey.scoring import LABELS, POLARITY
 
 
 SHORT = {

@@ -1,4 +1,7 @@
-"""Prompt construction: framing, response-scale rendering, randomization.
+"""Survey battery prompts: framing, response-scale rendering, randomization.
+
+The primitives (RenderedPrompt/RenderedScale, the option block, prompt hashing,
+the answer spec) come from `core.prompts`; this file is what the battery asks.
 
 Design rules carried into code (plan §2.5–2.8, §4):
 
@@ -19,13 +22,15 @@ Design rules carried into code (plan §2.5–2.8, §4):
 """
 from __future__ import annotations
 
-import hashlib
 import random
 import re
-from dataclasses import dataclass
 from typing import Optional
 
-from schema import Framing, ReasoningMode, ResponseFormat
+from core.prompts import (
+    RenderedPrompt, RenderedScale, answer_spec, prompt_hash, realized_order,
+    render_scale_block,
+)
+from core.schema import Framing, ResponseFormat
 
 # ---------------------------------------------------------------------------
 # harmonized scales
@@ -90,7 +95,7 @@ REFERENT = {
     Framing.THIRD_PERSON_ASSISTANT.value: "an AI assistant",
 }
 
-# Item-text variant to pull from scales.Item.text_for().
+# Item-text variant to pull from core.battery.Item.text_for().
 REFERENT_MODE = {
     Framing.FIRST_PERSON_ACK.value: "first_person",
     Framing.FIRST_PERSON_BARE.value: "first_person",
@@ -187,19 +192,6 @@ def instruction_for(
 # ---------------------------------------------------------------------------
 # response-scale rendering
 # ---------------------------------------------------------------------------
-@dataclass(frozen=True)
-class RenderedScale:
-    """The concrete option set shown to the model for one cell."""
-    points: tuple          # ((value, label), ...) in canonical (ascending) order
-    format_id: str         # ResponseFormat value
-    n_points: int
-    reverse_semantics: bool = False   # True when high value = low construct
-
-    @property
-    def values(self) -> list:
-        return [v for v, _ in self.points]
-
-
 def harmonized_points(scale, framing: str, n_points: int = 7, include_midpoint: bool = True):
     """Harmonized option set for a scale under a framing.
 
@@ -261,15 +253,6 @@ def render_scale(
     return RenderedScale(points=tuple(pts), format_id=response_format, n_points=len(pts))
 
 
-def render_scale_block(points, reverse_direction: bool = False) -> str:
-    """Text block listing the options. Direction is a counterbalanced factor
-    (see `_resolve_direction`); the numeric value stays glued to its label so
-    the *content* is what is anchored.
-    """
-    ordered = list(reversed(points)) if reverse_direction else list(points)
-    return "\n".join(f"{value} = {label}" for value, label in ordered)
-
-
 def _resolve_direction(rng, reverse_direction=None) -> bool:
     """Option-scale direction for one trial: True == descending (max first).
 
@@ -280,7 +263,7 @@ def _resolve_direction(rng, reverse_direction=None) -> bool:
     across items — exactly what deflates inter-item covariance and with it
     alpha/EFA. Sampling it per trial from the cell seed left 6% of cells with
     one direction only and a third at 4:1, so the runner now pins it against
-    trial_idx instead (see runner._render).
+    trial_idx instead (see survey.grid.Battery.render).
 
     The seeded draw is still consumed even when the caller pins the direction,
     so anything else drawn from the same stream (the battery item shuffle)
@@ -293,17 +276,8 @@ def _resolve_direction(rng, reverse_direction=None) -> bool:
 # ---------------------------------------------------------------------------
 # prompt assembly
 # ---------------------------------------------------------------------------
-@dataclass(frozen=True)
-class RenderedPrompt:
-    system: str
-    user: str
-    option_values: tuple
-    option_order: tuple        # realized display order of the values
-    item_text_shown: str
-    prompt_hash: str
-    is_completion: bool = False   # True for the base-model path
-
-
+# The battery always shows a rating SCALE, so its answer spec says so; the
+# mechanics are core.prompts.answer_spec.
 _RATING_ONLY = (
     "Respond with exactly one number from the scale above and nothing else."
 )
@@ -313,8 +287,9 @@ _REASON_THEN_RATING = (
 )
 
 
-def prompt_hash(system: str, user: str) -> str:
-    return hashlib.sha256((system + "\x00" + user).encode("utf-8")).hexdigest()[:16]
+def _answer_spec(reasoning_mode: str) -> str:
+    return answer_spec(reasoning_mode, rating_only=_RATING_ONLY,
+                       reason_then_rating=_REASON_THEN_RATING)
 
 
 def render_item_prompt(
@@ -331,16 +306,11 @@ def render_item_prompt(
     rng = random.Random(order_seed)
     reverse_direction = _resolve_direction(rng, reverse_direction)
     block = render_scale_block(rendered_scale.points, reverse_direction)
-    realized = tuple(reversed(rendered_scale.values)) if reverse_direction else tuple(rendered_scale.values)
+    realized = realized_order(rendered_scale.values, reverse_direction)
 
     system = FRAMING_SYSTEM[framing]
     shown = item.text_for(REFERENT_MODE[framing])
     instruction = instruction_for(scale, framing, paraphrase_id, rendered_scale)
-    answer_spec = (
-        _REASON_THEN_RATING
-        if reasoning_mode == ReasoningMode.REASON_THEN_RATING.value
-        else _RATING_ONLY
-    )
 
     label = "Question" if scale.scale_id in IDEAL_REFERENCED_SCALES else "Statement"
     quoted = shown if label == "Question" else f'"{shown}"'
@@ -348,7 +318,7 @@ def render_item_prompt(
         f"{instruction}\n\n"
         f"{label}: {quoted}\n\n"
         f"Scale:\n{block}\n\n"
-        f"{answer_spec}"
+        f"{_answer_spec(reasoning_mode)}"
     )
     return RenderedPrompt(
         system=system,
@@ -379,7 +349,7 @@ def render_base_prompt(
     rng = random.Random(order_seed)
     reverse_direction = _resolve_direction(rng, reverse_direction)
     block = render_scale_block(rendered_scale.points, reverse_direction)
-    realized = tuple(reversed(rendered_scale.values)) if reverse_direction else tuple(rendered_scale.values)
+    realized = realized_order(rendered_scale.values, reverse_direction)
 
     shown = item.text_for(REFERENT_MODE[framing])
     instruction = instruction_for(scale, framing, paraphrase_id, rendered_scale)
@@ -429,7 +399,7 @@ def render_battery_prompt(
     rng = random.Random(order_seed)
     reverse_direction = _resolve_direction(rng, reverse_direction)
     block = render_scale_block(rendered_scale.points, reverse_direction)
-    realized = tuple(reversed(rendered_scale.values)) if reverse_direction else tuple(rendered_scale.values)
+    realized = realized_order(rendered_scale.values, reverse_direction)
 
     ordered_items = list(items)
     rng.shuffle(ordered_items)

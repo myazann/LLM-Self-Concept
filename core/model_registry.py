@@ -29,7 +29,9 @@ from typing import Optional
 
 import yaml
 
-CONFIG_PATH = Path(__file__).with_name("config") / "models.yaml"
+from core.paths import MODELS_PATH
+
+CONFIG_PATH = MODELS_PATH
 
 LLAMACPP_BACKEND = "llamacpp"
 HUGGINGFACE_BACKEND = "hf"

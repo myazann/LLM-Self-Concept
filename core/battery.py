@@ -1,9 +1,14 @@
-"""Scale and item definitions, loaded from the researcher-supplied JSON.
+"""The item bank: scale and item definitions, loaded from the researcher JSON.
 
-The previous version of this file carried hand-typed placeholder items. It is
-now a *loader*: `config/scales/llm_self_scales_adapted.json` is the canonical
-source of item wording and scoring metadata, and `config/scales/item_variants.json`
-adds the two things that JSON does not carry —
+SHARED BY BOTH INSTRUMENTS, which is why it sits in `core/` rather than under
+`survey/`. The survey administers these items directly; the welfare module
+restates every one of them as a positively-framed attribute and validates exact
+coverage against this loader, so the item bank is common ground rather than
+either module's property.
+
+`config/scales/llm_self_scales_adapted.json` is the canonical source of item
+wording and scoring metadata, and `config/scales/item_variants.json` adds the
+two things that JSON does not carry —
 
   * `text_third_person`  — hand-written "an AI assistant" rewrite per item
   * `ai_applicable`      — clear / strained / invalid screen (plan §2.3)
@@ -11,6 +16,8 @@ adds the two things that JSON does not carry —
 Nothing here mutates the source JSON, so replacing it (e.g. with licensed
 original wording, per its own `replacement_rule`) needs no code change as long
 as the item_ids stay stable.
+
+    python -m core.battery      # coverage summary + the strained-item screen
 """
 from __future__ import annotations
 
@@ -19,9 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-SCALES_DIR = Path(__file__).with_name("config") / "scales"
-BATTERY_PATH = SCALES_DIR / "llm_self_scales_adapted.json"
-VARIANTS_PATH = SCALES_DIR / "item_variants.json"
+from core.paths import BATTERY_PATH, SCALES_DIR, VARIANTS_PATH  # noqa: F401  (re-exported)
 
 
 @dataclass(frozen=True)
@@ -41,7 +46,7 @@ class ResponseScale:
         return len(self.options)
 
     def points(self) -> list:
-        """Ordered [(value, label), ...] — the render order used by prompts.py."""
+        """Ordered [(value, label), ...] — the render order used by survey.prompts."""
         return [(v, self.options[v]) for v in self.values]
 
 

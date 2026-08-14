@@ -1,6 +1,6 @@
 """Model adapters: one per backend, built from a `ModelSpec`.
 
-Routing and quantization follow MentalWellbeingPrompts (see model_registry.py),
+Routing and quantization follow MentalWellbeingPrompts (see core/model_registry.py),
 but the measurement contract is different: every adapter exposes BOTH paths and
 declares which it actually supports.
 
@@ -34,7 +34,7 @@ if os.environ.get("TRANSFORMERS_CACHE"):
     os.environ.setdefault("HF_HOME", os.environ["TRANSFORMERS_CACHE"])
     os.environ.pop("TRANSFORMERS_CACHE", None)
 
-from model_registry import (
+from core.model_registry import (
     ANTHROPIC_BACKEND,
     HUGGINGFACE_BACKEND,
     LLAMACPP_BACKEND,
@@ -46,7 +46,7 @@ from model_registry import (
 
 # The LOGPROB path never samples — it reads the distribution at the answer
 # position — so every backend that exposes logprobs is called with this, and
-# runner._record stamps it on the row instead of the spec's sampling
+# the runner stamps it on the row instead of the spec's sampling
 # temperature. Single source of truth so the two cannot drift.
 LOGPROB_TEMPERATURE = 0.0
 

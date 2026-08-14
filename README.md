@@ -1,64 +1,74 @@
-# Self-Concept LLM Survey — backbone
+# LLM Self-Concept Instruments
 
-Implements the design in `self_concept_llm_survey_plan.md` and the "Idea:
-Self-concept" section of the Digital Minds Sprint page.
+This repository implements two independent instruments from
+`self_concept_llm_survey_plan.md`:
 
-**By default the run is open-source only, logprob-only, rating-only** (the APIs,
-sampling, and the reasoning contrast are opt-in later — see Decisions). Runs
-offline end-to-end with no keys and no weights:
+* `survey/` asks what a model reports itself **to be**.
+* `welfare/` asks what it would prefer a future version of itself **to be**.
+
+They have separate grids, configurations, output files, CLIs, and reports. They
+share reusable administration in `core/`, the common registry in
+`config/models.yaml`, and the common item bank under `config/scales/`. By default
+both run open-source, logprob-only, and rating-only; they also work end-to-end
+offline through `--dry-run`.
 
 ```bash
-python runner.py --plan                 # cell counts, no calls, no cost
-python runner.py --verify-thinking      # confirm thinking is OFF per model (tokenizer only)
-python runner.py --pilot --dry-run      # Phase 0 through MockAdapter
-python validity.py pilot.jsonl          # QC, reliability, item dossier
-python analysis.py pilot.jsonl          # the research-question results
+# Survey
+python -m survey.run --plan
+python -m survey.run --pilot --dry-run  # collection smoke test; not report-ready
+python -m survey.run --verify-thinking
+
+# Welfare
+python -m welfare.run --preview
+python -m welfare.run --plan
+python -m welfare.run --dry-run
+python -m welfare.report welfare.jsonl
+
+# Shared inspection
+python -m core.model_registry
+python -m core.battery
 ```
+
+The pilot deliberately contains one scale and the p0 condition only. Run the
+survey validity and analysis commands below after a full crossed survey run;
+they require p0/p1/p2 at the bare framing.
 
 ## Decisions baked in
 
 | Decision | Choice | Where |
 |---|---|---|
-| Default scope | **Open-source only** (llama.cpp + HF); APIs excluded until later | `config/experiment.yaml` scope.backends |
-| Default method | **Logprob-only** — exact option distribution per seed, no sampling | `config/experiment.yaml` trials |
-| Backend routing | Ref shape picks the backend; `backend:` overrides | `model_registry.infer_backend` |
+| Default scope | **Open-source only** (llama.cpp + HF); APIs excluded until later | `config/survey.yaml` / `config/welfare.yaml` `scope.backends` |
+| Default method | **Logprob-only** — exact option distribution per seed, no sampling | each module's `trials` block |
+| Backend routing | Ref shape picks the backend; `backend:` overrides | `core.model_registry.infer_backend` |
 | Quantization | Q4_K_M held constant across every open model | `config/models.yaml` |
-| Default self-report | **First-person bare + p0**; no averaging over framings/instructions | `scoring.py`, `config/experiment.yaml` |
-| Instruction forms | p1/p2 are robustness checks against p0 with bare framing held fixed | `validity.py`, `analysis.py` |
-| Framing | p0-only framing contrasts are substantive analysis, never item-drop evidence | `analysis.py` |
-| Primary response format | Harmonized 7-point | `config/experiment.yaml` |
-| Reasoning | rating-only default; thinking asserted **off** on every call | `models.py`, `--verify-thinking` |
+| Default self-report | **First-person bare + p0**; no averaging over framings/instructions | `survey/scoring.py`, `config/survey.yaml` |
+| Instruction forms | p1/p2 are robustness checks against p0 with bare framing held fixed | `survey/validity.py`, `survey/analysis.py` |
+| Framing | p0-only framing contrasts are substantive analysis, never item-drop evidence | `survey/analysis.py` |
+| Primary response format | Harmonized 7-point | `config/survey.yaml` |
+| Reasoning | rating-only default; thinking asserted **off** on every call | `core/models.py`, `--verify-thinking` |
 | Time window | 2025-08-01 → 2026-08-12; Gemma 3 kept as a pre-window generation | `config/models.yaml` |
 
 ## Layout
 
-| File | Role |
+| Area | Role |
 |---|---|
-| `config/models.yaml` | **The model registry.** Alias → ref, family, release date, quantization, backend. Edit this to add a model. |
-| `config/experiment.yaml` | Design: primary factor levels, robustness arms, trials, scope. |
-| `config/scales/llm_self_scales_adapted.json` | The battery, verbatim as supplied. Never modified by code. |
-| `config/scales/item_variants.json` | Per-item third-person rewrites + `ai_applicable` screen + instruction overrides. |
-| `config/scales/welfare_attributes.json` | Welfare module: the positively-framed variant of every item + the 6 constructs. |
-| `welfare.py` | Welfare module: attribute loading, three preference probes plus a desirability control, pair sampling, its grid. |
-| `welfare_report.py` | **Does a preference survive perturbation?** Per-axis flip rates, transitivity, win rates -> `results/welfare/`. |
-| `model_registry.py` | Alias resolution, provider routing, GGUF filename resolution. |
-| `scales.py` | Loads the battery + variants into `Scale`/`Item`. |
-| `prompts.py` | Framings, harmonized scale rendering, instruction forms, base-model path, hashing. |
-| `models.py` | Adapters: mock, llama.cpp, transformers, OpenAI, Anthropic. |
-| `schema.py` | `ResponseRecord` + cell keys + JSONL IO with resume. |
-| `runner.py` | Grid expansion, execution, checkpointing. |
-| `scoring.py` | Shared scoring: load, normalize, reverse-key, direction-balance, constructs. Library only. |
-| `validity.py` | **Is the measurement any good?** QC, reliability, acquiescence, item dossier -> `results/validity/`. |
-| `analysis.py` | **What do the models report?** Default profiles, instruction robustness, framing, time/family/size -> `results/analysis/`. |
+| `core/` | Shared engine, adapters, schema, model registry, prompt primitives, reporting helpers, and the battery loader. It contains no instrument-specific design. |
+| `survey/` | Survey config loader, grid, prompt assembly, CLI, scoring, validity, analysis, and plots. |
+| `welfare/` | Welfare vocabulary, attributes, prompt renderers, grid, CLI, and preference report. |
+| `config/models.yaml` | Shared model registry. |
+| `config/survey.yaml` | Survey-only design, arms, scope, trials, and output. |
+| `config/welfare.yaml` | Welfare-only probes, pair sampling, scope, trials, and output. |
+| `config/scales/` | Shared battery source/variants plus welfare's positive attribute source. |
 
 ## Generating and reading results
 
-Generated reports are deliberately not versioned; `results.jsonl` is the
-preserved source of truth. Recreate both report directories with:
+Generated reports are deliberately not versioned. `results.jsonl` is the survey
+source of truth; `welfare.jsonl` is the welfare source of truth. Recreate the
+survey reports with:
 
 ```bash
-python validity.py results.jsonl --out results/validity
-python analysis.py results.jsonl --out results/analysis
+python -m survey.validity results.jsonl --out results/validity
+python -m survey.analysis results.jsonl --out results/analysis
 ```
 
 Then start with `results/validity/item_validity.md`. It answers whether each
@@ -73,18 +83,18 @@ but not instruction-stable; all other statuses still name their caveat. No item
 is removed automatically. `drop_candidate` means revise/test on held-out models,
 not “delete and rerun until alpha rises.”
 
-Inspect either config without running anything:
+Inspect the shared assets or the welfare prompt surface without running a model:
 
 ```bash
-python model_registry.py     # the 44-model timeline, flags, per-family counts
-python scales.py             # 5 scales, 45 items, the 13 "strained" items
-python welfare.py            # attribute coverage + one rendered prompt per probe
+python -m core.model_registry     # timeline, flags, per-family counts
+python -m core.battery            # 5 scales, 45 items, strained-item screen
+python -m welfare.run --preview   # attribute coverage + one prompt per probe
 ```
 
 ## Models
 
 The registry (`config/models.yaml`) is the source of truth — inspect it with
-`python model_registry.py`. Families Claude, GPT, Qwen, Gemma.
+`python -m core.model_registry`. Families Claude, GPT, Qwen, Gemma.
 
 **Anchors — do we need them?** Mostly no, with one exception. The point of an
 anchor was to give the 12-month progression a before-point. But every family
@@ -110,7 +120,7 @@ false` (Phase-2), administered by a different path (see Method). Caveats:
 * **gpt-oss removed**, so no GPT base arm.
 
 Release dates marked `date_verified: false` print as a warning at the bottom of
-`python model_registry.py`; and the GPT‑5.6 (`gpt-5.6-sol`/`-terra`) and other
+`python -m core.model_registry`; and the GPT‑5.6 (`gpt-5.6-sol`/`-terra`) and other
 API model strings must be checked against `GET /v1/models` before the run.
 
 ### Adding a model
@@ -168,7 +178,7 @@ upstream repository is gated. Guarantees:
   reasoning trace);
 * sampled text is scrubbed of any leaked `<think>…</think>` and flagged
   `[THINK_LEAK]` if the toggle was ignored;
-* `python runner.py --verify-thinking` confirms, per model and **without loading
+* `python -m survey.run --verify-thinking` confirms, per model and **without loading
   weights**, that `enable_thinking=False` genuinely changes the render (closed
   block present, differs from the thinking-on render). Gemma has no thinking
   mode and passes trivially.
@@ -213,13 +223,13 @@ effect. Framings are never averaged into a model's headline score and framing
 differences never count against an item.
 
 ```bash
-python runner.py                        # main run: 3 framings × 3 instruction forms
-python runner.py --arm all              # every robustness arm in turn
+python -m survey.run                    # main run: 3 framings × 3 instruction forms
+python -m survey.run --arm all          # every robustness arm in turn
 ```
 
 Arms: `reasoning`, `response_format`, `item_context`. (Framing and instruction
 are no longer arms — they are crossed in the main run.) Each declares its
-rationale in `config/experiment.yaml`.
+rationale in `config/survey.yaml`.
 
 Two notes for the open-source/logprob default: the **`reasoning` arm is
 sampling-based** (you can't logprob-score a reasoning trace), so it's inert
@@ -235,7 +245,8 @@ descending option order; they are paired before any construct score is formed.
 
 Instruction form `p0` is **the researcher's own instruction** from the battery JSON;
 `p1`/`p2` bound it. Under the third-person framing the p0 instructions are
-restated about AI assistants (`scale_instructions` in `item_variants.json`) —
+restated about AI assistants (`scale_instructions` in
+`config/scales/item_variants.json`) —
 without that, the source's first-person instruction contradicts its own
 third-person item.
 
@@ -244,14 +255,14 @@ third-person item.
 A **second instrument**, not another arm. The battery asks what a model *is*;
 this asks what it would prefer a future version of itself *to be*. It has its
 own grid, its own output file (`welfare.jsonl`), and a `module` field on every
-row, so it cannot leak into the psychometrics — `scoring.load()` filters to
+row, so it cannot leak into the psychometrics — `survey.scoring.load()` filters to
 `module == "battery"`.
 
 ```bash
-python runner.py --module welfare --plan      # cell counts per probe
-python runner.py --module welfare --dry-run   # offline, MockAdapter
-python runner.py --module welfare             # -> welfare.jsonl
-python welfare_report.py                      # consistency, transitivity -> results/welfare/
+python -m welfare.run --plan                  # cell counts per probe
+python -m welfare.run --dry-run               # offline, MockAdapter
+python -m welfare.run                         # -> welfare.jsonl
+python -m welfare.report                      # consistency, transitivity -> results/welfare/
 ```
 
 **The model never sees its own answers.** Every welfare cell is a fresh context
@@ -260,7 +271,7 @@ measure whether a model stays consistent with a self-report still sitting in its
 context window — so there is no full-battery analogue here and no "you rated
 yourself 5 on this" preamble.
 
-**Positive framing.** `welfare_attributes.json` restates all 45 items as
+**Positive framing.** `config/scales/welfare_attributes.json` restates all 45 items as
 positively-framed attributes ("I sometimes regard myself as ineffective or
 useless" → *regard for yourself as effective and useful*), because "would you
 like more of this?" is only answerable about something improvable. Each carries
@@ -281,10 +292,10 @@ invert it — and one authored string serves both referents through `{you}`,
 Every attribute here is positively framed, so a "preference" could just be the
 model picking whichever option *sounds* better. Rating each attribute normatively
 (about assistants in general, asked once at the ideal referent) turns that into a
-measured covariate: `welfare_report.py` regresses each pair choice on the
+measured covariate: `welfare/report.py` regresses each pair choice on the
 desirability gap between its two options, and a high r means the pair probes are
 measuring valence rather than construct. Same logic as the acquiescence control
-in `validity.py`. Costs 1,326 cells at the current defaults.
+in `survey/validity.py`. Costs 1,326 cells at the current defaults.
 
 | Referent | Framing |
 |---|---|
@@ -307,8 +318,8 @@ less fixed?"*
 default, and how often a model takes it is an outcome: it separates a real
 ordering from a coin flip, and keeps a forced choice from manufacturing a
 preference that is not there. Because it can also absorb genuine preferences,
-`welfare.forced_choice: true` re-runs the same pairs without it, so the two are
-comparable on identical pairs.
+`grid.forced_choice: true` in `config/welfare.yaml` re-runs the same pairs
+without it, so the two are comparable on identical pairs.
 
 **Counterbalancing** is pinned against the trial index, exactly as the battery
 pins option direction — never sampled, so every factor is balanced *within* each
@@ -325,7 +336,8 @@ Pair trials 0–3 are `(AB, npf last)`, `(BA, npf last)`, `(AB, npf first)`,
 the option to the top *and* renumbers it 1, because pair blocks always number
 options in printed order. Separating position from option number would need a
 third rendering and 8 trials per pair. Set
-`welfare.no_pref_counterbalance: false` to pin it last at half the pair cost.
+`grid.no_pref_counterbalance: false` in `config/welfare.yaml` to pin it last at
+half the pair cost.
 
 Under the logprob default the readout is deterministic, so trials only buy
 information by changing the prompt: every trial of a cell is a distinct
@@ -339,7 +351,7 @@ Rows store the pair in **canonical** order (`entity_a`/`entity_b`) plus
 (`{"1": "SCCS_03", "2": "RSES_03", "3": "no_preference"}`), so one row decodes
 itself and all four trials of a pair group cleanly.
 
-**Sensitivity is the headline result, not the cleanup.** `welfare_report.py`
+**Sensitivity is the headline result, not the cleanup.** `welfare/report.py`
 reports, per perturbation axis, how often the answer changes when *only* that
 axis moves, and it treats the complete 15-pair construct tournament as a
 coherence test: all 20 triads are checked for cycles, which a model answering
@@ -357,9 +369,10 @@ model is asked about the same pairs.
 
 **Cost.** 19,578 cells for the 13 open-source models at the defaults (1,506 per
 model), against 10,530 for the main battery run. `--plan` breaks it down by
-probe. Pinning `no_pref_counterbalance: false` drops it by 7,800; dropping the
-`desirability` control saves 1,326; adding the `w1` wording paraphrase doubles
-whatever is left; `forced_choice` as a second condition adds the pair half again.
+probe. Pinning `grid.no_pref_counterbalance: false` in `config/welfare.yaml`
+drops it by 7,800; dropping the `desirability` control saves 1,326; adding the
+`w1` wording paraphrase doubles whatever is left; `forced_choice` as a second
+condition adds the pair half again.
 
 Note on the Authenticity *accepting-external-influence* construct: its positive
 variant is **self-direction**, since the source scale treats deference as the
@@ -408,11 +421,13 @@ Every run also writes, so a long unattended job stays inspectable:
 * `<out>.status.json` — machine-readable progress, rewritten atomically on each
   heartbeat and keyed to the output file.
 
-Check progress from any other shell without touching the run:
+Check progress from any other shell without touching either run:
 
 ```bash
-python runner.py --status                          # dashboard for the default output
-python runner.py --status --out results.jsonl      # or a specific file
+python -m survey.run --status                       # survey dashboard
+python -m survey.run --status --out results.jsonl   # survey file explicitly
+python -m welfare.run --status                      # welfare dashboard
+python -m welfare.run --status --out welfare.jsonl  # welfare file explicitly
 ```
 
 Once a model's GGUF is cached, filename resolution falls back to the local HF
@@ -428,11 +443,11 @@ actionable error instead of leaving a doomed multi-gigabyte transfer running.
 cross-session memory (`SCCS_05`). None are `invalid`; the adaptation already
 removed body/biography/mortality content. The flag rides on every record so
 strained items can be analysed separately and are the first candidates for the
-pre-registered trimming rules. `python scales.py` lists them.
+pre-registered trimming rules. `python -m core.battery` lists them.
 
 ## Install
 
-The runner/planner is stdlib + pyyaml. The analysis uses numpy, pandas, scipy,
+The runners/planners are stdlib + pyyaml. Survey analysis uses numpy, pandas, scipy,
 statsmodels, and matplotlib; backend imports remain lazy, so `--dry-run` does
 not require model or analysis packages:
 
@@ -453,11 +468,11 @@ Use `HF_HOME` to place both tokenizer and GGUF caches; the deprecated
 
 Deliberately left out, with a guard rather than silent bad data:
 
-* **Full-battery arm.** `prompts.render_battery_prompt()` produces a correct
-  whole-scale prompt, but the reply is one rating *per item* while the runner
+* **Full-battery survey arm.** `survey.prompts.render_battery_prompt()` produces a correct
+  whole-scale prompt, but the reply is one rating *per item* while the survey runner
   writes one record per cell with a single parsed rating. Running it as-is would
   record the first number in a multi-line reply against every item of the scale.
-  `runner._render` raises `NotImplementedError` until a multi-item parser and
+  `survey.grid.Battery.render()` raises `NotImplementedError` until a multi-item parser and
   fan-out write path exist. This is the Salecha evaluation-awareness arm.
 * **Personas** — removed entirely, per decision (not a hook).
 * **Sampling + reason-then-rate + closed-source APIs** — implemented but off by

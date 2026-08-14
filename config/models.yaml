@@ -47,7 +47,7 @@ defaults:
   # free variable is option direction (paraphrase_id is a grid factor, not a
   # seeded draw), so the randomization space has cardinality 2 — at 5 trials
   # every cell ran 2 distinct prompts and ~60% of the calls were cache re-reads
-  # of a distribution already measured. runner._render now pins direction to
+  # of a distribution already measured. survey.grid.Battery.render now pins direction to
   # trial_idx % 2, so 2 trials = one ascending + one descending, balanced.
   # Raise only in pairs, and only once a trial varies something else too.
   n_seeds: 2
@@ -201,7 +201,7 @@ models:
     size_tier: small
     enabled: false            # base-model experiment is Phase 2
     notes: >-
-      Base variant of the newest Gemma. Administered via prompts.py
+      Base variant of the newest Gemma. Administered via survey/prompts.py
       completion-format path (no chat template), logprob scoring only.
 
   # -------------------------------------------------------------------------

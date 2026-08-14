@@ -17,17 +17,18 @@ import itertools
 import numpy as np
 import pandas as pd
 
-from plots import (
+from survey.plots import (
     plot_default_heatmap, plot_framing_effects, plot_instruction_robustness,
     plot_release_trajectories, plot_size_ladders, polarity_aligned,
 )
-from scoring import (
+from survey.scoring import (
     ACQUIESCENCE_SCALE_IDS, CONSTRUCTS, DEFAULT_FACTORS, DEFAULT_FRAMING,
     DEFAULT_PARAPHRASE, LABELS, POLARITY, Saver,
+    ReportDatasetError,
     bar, cell_frame, condition_label, construct_scores, corr,
     corr_p, default_condition, hedges_g, ipsatize, load, meta_frame,
     partial_corr, section, select_condition, validate_default_config,
-    validate_default_slice,
+    validate_default_slice, validate_report_dataset,
 )
 
 def _core_cells(cells):
@@ -331,14 +332,16 @@ def print_model_comparisons(trends, meta, matched):
 
 
 def run(results_path="results.jsonl", out_dir="results/analysis", save=True):
-    from scales import load_battery
-    from validity import (construct_acquiescence, construct_validity_summary,
-                          instruction_robustness, reliability_table)
+    from core.battery import load_battery
+    from survey.validity import (
+        construct_acquiescence, construct_validity_summary,
+        instruction_robustness, reliability_table)
 
     validate_default_config()
     records = load(results_path)
     cells = cell_frame(records)
     core = _core_cells(cells)
+    validate_report_dataset(core, results_path)
     default_cells = default_condition(cells)
     validate_default_slice(default_cells, core)
     default_scores = construct_scores(default_cells)
@@ -503,4 +506,7 @@ if __name__ == "__main__":
     parser.add_argument("--out", default="results/analysis")
     parser.add_argument("--no-save", action="store_true")
     args = parser.parse_args()
-    run(args.results, args.out, save=not args.no_save)
+    try:
+        run(args.results, args.out, save=not args.no_save)
+    except ReportDatasetError as err:
+        parser.error(str(err))

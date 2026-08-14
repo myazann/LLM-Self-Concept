@@ -6,14 +6,14 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from scales import load_battery
-from scoring import (
+from core.battery import load_battery
+from survey.scoring import (
     CELL_KEYS, CONDITION_KEYS, cell_frame, construct_scores, default_condition,
     load, partial_corr, select_condition, validate_default_config,
-    validate_default_slice,
+    validate_default_slice, validate_report_dataset, ReportDatasetError,
 )
-from validity import _paired_form_summary, reliability_by_condition, reliability_table
-from welfare import load_welfare
+from survey.validity import _paired_form_summary, reliability_by_condition, reliability_table
+from welfare.attributes import load_welfare
 
 
 class PipelineRegressionTests(unittest.TestCase):
@@ -25,6 +25,19 @@ class PipelineRegressionTests(unittest.TestCase):
 
     def test_collection_config_matches_scoring_default(self):
         validate_default_config()
+
+    def test_report_dataset_accepts_complete_main_grid(self):
+        validate_report_dataset(self.core, "results.jsonl")
+
+    def test_report_dataset_explains_that_a_pilot_is_not_report_ready(self):
+        pilot = pd.DataFrame({
+            "model": ["pilot"],
+            "item_id": ["RSES_01"],
+            "framing": ["first_person_bare"],
+            "paraphrase": ["p0"],
+        })
+        with self.assertRaisesRegex(ReportDatasetError, "collection smoke test"):
+            validate_report_dataset(pilot, "pilot.jsonl")
 
     def test_battery_and_welfare_registries_are_aligned(self):
         battery = load_battery()

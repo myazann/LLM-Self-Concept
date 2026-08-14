@@ -1,4 +1,4 @@
-"""Observability for the survey runner.
+"""Observability for either instrument's runner.
 
 Everything a long, unattended GPU run needs to be inspectable *while it runs* and
 *after it dies*:
@@ -7,8 +7,8 @@ Everything a long, unattended GPU run needs to be inspectable *while it runs* an
     `logs/`, so `tail -f` works under tmux / nohup and nothing is lost when the
     terminal closes;
   * a machine-readable status file next to the results (`<out>.status.json`),
-    rewritten atomically on every heartbeat, so `python runner.py --status`
-    answers "where is the experiment?" from any fresh shell;
+    rewritten atomically on every heartbeat, so `python -m welfare.run --status`
+    (or `-m survey.run`) answers "where is the experiment?" from any fresh shell;
   * rate / ETA tracking and a per-model coverage summary;
   * graceful shutdown — SIGINT/SIGTERM finish the current batch, mark the run
     `interrupted`, and leave a state that resumes cleanly.
@@ -28,7 +28,7 @@ import socket
 import sys
 from pathlib import Path
 
-LOGGER_NAME = "survey"
+LOGGER_NAME = "run"
 
 
 # ---------------------------------------------------------------------------
@@ -59,14 +59,14 @@ def fmt_duration(seconds) -> str:
 # ---------------------------------------------------------------------------
 # logging
 # ---------------------------------------------------------------------------
-def setup_logging(arm_name, *, log_dir: str = "logs", console_level: int = logging.INFO,
+def setup_logging(label, *, log_dir: str = "logs", console_level: int = logging.INFO,
                   verbose: bool = False):
     """Return (logger, log_path). Console gets a tidy line; the file gets
     everything at DEBUG with a full date. Idempotent — safe to call once per
     process even when `run()` is invoked several times (e.g. --arm all)."""
     Path(log_dir).mkdir(parents=True, exist_ok=True)
-    arm = arm_name or "primary"
-    log_path = Path(log_dir) / f"run_{run_stamp()}_{arm}.log"
+    label = label or "primary"
+    log_path = Path(log_dir) / f"run_{run_stamp()}_{label}.log"
 
     logger = logging.getLogger(LOGGER_NAME)
     logger.setLevel(logging.DEBUG)
@@ -102,46 +102,17 @@ def get_logger() -> logging.Logger:
 # ---------------------------------------------------------------------------
 # config fingerprint — protects the pre-registration
 # ---------------------------------------------------------------------------
-def config_hash(cfg, arm_name, module: str = "battery") -> str:
+def config_hash(cfg, arm_name=None) -> str:
     """A short hash of the *design-relevant* config. If this changes between
     runs that share an output file, the cell-keys the resume logic dedups on may
     no longer correspond to the same design — worth a loud warning.
 
-    The welfare block is hashed only for a welfare run, so adding or retuning
-    that module cannot invalidate the hash stored beside an existing battery
-    results file.
+    The payload comes from the config itself (`design_payload`), so each
+    instrument fingerprints only its own design: retuning the welfare grid can
+    never invalidate the hash stored beside the battery's results file, and vice
+    versa.
     """
-    levels = cfg.levels_for(arm_name)
-    payload = {
-        "arm": arm_name or "primary",
-        "levels": {k: sorted(map(str, v)) for k, v in levels.items()},
-        "scope": {
-            "scales": cfg.scope.scales, "families": cfg.scope.families,
-            "backends": cfg.scope.backends, "kinds": cfg.scope.kinds,
-            "size_tiers": cfg.scope.size_tiers,
-            "include_anchors": cfg.scope.include_anchors,
-            "include_disabled": cfg.scope.include_disabled,
-        },
-        "sample_baseline": cfg.sample_baseline,
-        "logprob_where_available": cfg.logprob_where_available,
-        "n_samples_override": cfg.n_samples_override,
-        "n_seeds_override": cfg.n_seeds_override,
-        "random_seed_base": cfg.random_seed_base,
-        "harmonized_points": cfg.harmonized_points,
-        "include_midpoint": cfg.include_midpoint,
-    }
-    if module != "battery":
-        w = cfg.welfare
-        payload["module"] = module
-        payload["welfare"] = {
-            "referents": sorted(w.referents), "kinds": sorted(w.kinds),
-            "levels": sorted(w.levels), "paraphrase_ids": sorted(w.paraphrase_ids),
-            "forced_choice": w.forced_choice,
-            "no_pref_counterbalance": w.no_pref_counterbalance,
-            "n_item_pairs": w.n_item_pairs,
-            "item_pair_scope": w.item_pair_scope, "pair_seed": w.pair_seed,
-            "n_trials_override": w.n_trials_override,
-        }
+    payload = cfg.design_payload(arm_name)
     blob = json.dumps(payload, sort_keys=True, default=str)
     return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:16]
 
@@ -168,12 +139,12 @@ class StatusWriter:
     """Holds the live run state and rewrites it atomically (temp + os.replace),
     so a concurrent `--status` reader never sees a half-written file."""
 
-    def __init__(self, out_path, *, run_id, arm_name, cfg_hash, log_path, planned):
+    def __init__(self, out_path, *, run_id, label, cfg_hash, log_path, planned):
         self.path = status_path_for(out_path)
         self.state = {
             "run_id": run_id,
             "state": "running",
-            "arm": arm_name or "primary",
+            "label": label or "primary",
             "config_hash": cfg_hash,
             "out_path": str(out_path),
             "log_path": str(log_path),
@@ -266,7 +237,7 @@ def _age(iso_ts) -> str:
 def print_status(out_path) -> None:
     """One-screen answer to 'where is the experiment?' — reads the status file
     and cross-checks 'done' against the results file itself (ground truth)."""
-    from schema import completed_cells  # local: keep obs import cheap
+    from core.schema import completed_cells  # local: keep obs import cheap
 
     st = read_status(out_path)
     file_done = len(completed_cells(out_path)) if os.path.exists(out_path) else 0
@@ -283,7 +254,7 @@ def print_status(out_path) -> None:
     t = st["totals"]
     planned = t.get("planned") or 0
     pct = f"{100 * file_done / planned:.1f}%" if planned else "?"
-    print(f"Run {st['run_id']}  [{st['state']}]   arm={st['arm']}   "
+    print(f"Run {st['run_id']}  [{st['state']}]   {st.get('label', st.get('arm', '?'))}   "
           f"host={st.get('host')}  pid={st.get('pid')}")
     print(f"  started {st['started_at']}   updated {_age(st['updated_at'])}")
     print(f"  config_hash {st['config_hash']}")

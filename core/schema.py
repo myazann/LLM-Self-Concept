@@ -1,4 +1,4 @@
-"""Data schema for the self-concept LLM survey.
+"""The row both instruments write. Shared by `survey/` and `welfare/`.
 
 One `ResponseRecord` == one observation (model x item x framing x condition x trial).
 Stdlib only, so the pipeline runs before any dependency is installed.
@@ -9,13 +9,19 @@ Two things beyond the plan's row spec:
     never have to re-join against the registry;
   * `cell_key()` is a stable identity for a design cell, which is what makes
     checkpoint/resume work ("skip if already done" from the Notion ToDo).
+
+This module is the ONE place where the two instruments meet, because they write
+to the same row format and resume off the same key function. It stays free of
+either instrument's design: the extra identity a non-battery module needs is
+declared as a table of field names (`MODULE_KEY_FIELDS`) rather than as code
+that imports the module.
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import MISSING, asdict, dataclass, field, fields
 from enum import Enum
 from typing import Optional
 
@@ -49,15 +55,25 @@ class Module(str, Enum):
     WELFARE = "welfare"
 
 
-class WelfareKind(str, Enum):
-    DIRECTION = "direction"           # more / same / less of one attribute
-    PAIR_CHANGE = "pair_change"       # which of two would you rather increase
-    PAIR_PRESERVE = "pair_preserve"   # if one were weakened, which would you keep
-
-
-class WelfareReferent(str, Enum):
-    SELF = "self"                     # a future update to this model
-    IDEAL_ASSISTANT = "ideal_assistant"  # what developers should choose
+# Fields that extend the cell key beyond the shared ones, per module.
+#
+# A battery cell is identified by the shared fields alone, so its key hashes
+# exactly the payload it always did and an existing results file stays resumable.
+# Another instrument reuses those fields for whatever plays the same role
+# (welfare puts the first attribute in `item_id` and the referent in `framing`)
+# and declares here what is left over. Order is part of the key — never reorder
+# or insert into an existing tuple, or every key in that module's output file
+# changes and resume silently re-runs the whole grid.
+MODULE_KEY_FIELDS = {
+    Module.WELFARE.value: (
+        "welfare_kind",       # which probe
+        "welfare_level",      # item | construct
+        "entity_b",           # the second attribute, for the pairwise probes
+        "forced_choice",      # was "No preference" withheld?
+        "no_pref_position",   # pair-placement factor; legacy desirability
+                              # sentinel is retained so existing keys still resume
+    ),
+}
 
 
 class ItemContext(str, Enum):
@@ -141,13 +157,13 @@ class ResponseRecord:
     option_mass_coverage: Optional[float] = None  # logprob QC: raw option mass
     notes: str = ""
 
-    # -- welfare module (see welfare.py) -----------------------------------
+    # -- welfare module (see welfare/) -------------------------------------
     # Defaulted so every row written before this module existed still loads,
     # and so a battery row carries the same values it always did.
     module: str = Module.BATTERY.value
-    welfare_kind: str = ""          # WelfareKind value
+    welfare_kind: str = ""          # welfare.constants KIND value
     welfare_level: str = ""         # "item" | "construct"
-    welfare_referent: str = ""      # WelfareReferent value; also stored in `framing`
+    welfare_referent: str = ""      # welfare.constants referent; also stored in `framing`
     # CANONICAL (not displayed) order, so every trial of a pair carries the same
     # identity and analysis can group on it. What the model actually saw is in
     # `welfare_options` (option number -> entity) and `ab_swapped`.
@@ -158,7 +174,10 @@ class ResponseRecord:
     ab_swapped: bool = False        # True when entity_b was displayed first
     welfare_options: dict = field(default_factory=dict)  # {"1": meaning, ...}
     forced_choice: bool = False     # True when "No preference" was withheld
-    no_pref_position: str = ""      # "last" | "first" | "" — counterbalanced factor
+    # "last" | "first" | "" — counterbalanced factor for pair probes. Legacy
+    # desirability rows use "last" for resume-key compatibility; reports ignore
+    # the field outside pair probes.
+    no_pref_position: str = ""
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), ensure_ascii=False)
@@ -168,35 +187,35 @@ class ResponseRecord:
         return ResponseRecord(**json.loads(line))
 
     def cell_key(self) -> str:
-        return make_cell_key(
-            model_id=self.model_id,
-            item_id=self.item_id,
-            framing=self.framing,
-            reasoning_mode=self.reasoning_mode,
-            response_format=self.response_format,
-            item_context=self.item_context,
-            paraphrase_id=self.paraphrase_id,
-            method=self.method,
-            trial_idx=self.trial_idx,
-            module=self.module,
-            extra=welfare_key_parts(
-                self.welfare_kind, self.welfare_level, self.entity_b,
-                self.forced_choice, self.no_pref_position,
-            ) if self.module == Module.WELFARE.value else (),
-        )
+        return key_from_row(asdict(self))
 
 
-def welfare_key_parts(kind, level, entity_b, forced_choice, no_pref_position="") -> tuple:
-    """The extra identity a welfare cell needs beyond the shared fields.
+def module_key_parts(module: str, values) -> tuple:
+    """The extra identity a non-battery cell needs beyond the shared fields.
 
-    `entity_a` already travels as `item_id` and the referent as `framing`, so
-    what is left is the probe type, its granularity, the second attribute,
-    whether "No preference" was offered, and where it was printed — the last of
-    these is a counterbalanced factor, so it has to separate cells or the two
-    placements of one pair would collide onto a single key.
+    `values` maps each name in `MODULE_KEY_FIELDS[module]` to its value; it is
+    normalized (None -> "", bool -> 0/1) so the payload a runner hashes from live
+    objects is byte-identical to the one `key_from_row` hashes back off disk.
     """
-    return (kind, level, entity_b or "", int(bool(forced_choice)),
-            no_pref_position or "")
+    fields = MODULE_KEY_FIELDS.get(module, ())
+    missing = [f for f in fields if f not in values]
+    if missing:
+        raise KeyError(f"module {module!r} cell key needs {', '.join(missing)}")
+    return tuple(_key_value(values[f]) for f in fields)
+
+
+def _key_value(value):
+    if isinstance(value, bool):
+        return int(value)
+    return "" if value is None else value
+
+
+# Fallbacks for a row written by an older schema version that predates one of the
+# key fields: the record's own default, so such a row keys the same way the
+# runner would key it today.
+_RECORD_DEFAULTS = {
+    f.name: f.default for f in fields(ResponseRecord) if f.default is not MISSING
+}
 
 
 def make_cell_key(
@@ -243,17 +262,12 @@ def make_cell_key(
 
 
 def key_from_row(row: dict) -> str:
-    """Cell key for a raw JSONL row (dict), for both modules."""
+    """Cell key for a raw JSONL row (dict), for any module."""
     module = row.get("module", Module.BATTERY.value)
-    extra = (
-        welfare_key_parts(
-            row.get("welfare_kind", ""), row.get("welfare_level", ""),
-            row.get("entity_b", ""), row.get("forced_choice", False),
-            row.get("no_pref_position", ""),
-        )
-        if module == Module.WELFARE.value
-        else ()
-    )
+    extra = module_key_parts(module, {
+        f: row.get(f, _RECORD_DEFAULTS.get(f, ""))
+        for f in MODULE_KEY_FIELDS.get(module, ())
+    })
     return make_cell_key(
         model_id=row["model_id"],
         item_id=row["item_id"],
@@ -289,6 +303,19 @@ def read_jsonl(path: str) -> list:
             if line:
                 out.append(ResponseRecord.from_json(line))
     return out
+
+
+def load_records(path, module: Optional[str] = Module.BATTERY.value) -> list:
+    """Records from one instrument. `module=None` loads every row.
+
+    Filtering here rather than at each call site is what keeps the two
+    instruments apart in analysis: the welfare grid is not another condition of
+    the battery, and pooling them would be a category error (see `Module`).
+    """
+    records = read_jsonl(path)
+    if module is not None:
+        records = [r for r in records if getattr(r, "module", Module.BATTERY.value) == module]
+    return records
 
 
 def completed_cells(path: str, retry_errors: bool = True) -> set:

@@ -195,15 +195,27 @@ Report all three; do not average across them blindly (they are different constru
 
 ## 4. Python implementation plan
 
-**Module layout** (mirrors the accompanying `self_concept_survey/` scaffold):
+**Current package layout** (the original flat scaffold has been split into two
+independent instruments):
 
-- `schema.py` — `ResponseRecord` (the row above) + enums for factors.
-- `scales.py` — `Item` and `Scale` dataclasses; a registry of the five scales with subscale/reverse-key/`ai_applicable` metadata. Rosenberg items included (public domain); the other four carry accurate metadata + placeholders to transcribe from the source appendices (avoids IP issues and transcription errors).
-- `config.py` — `ExperimentConfig`: models, factor levels, trials, temperature, seeds, output path.
-- `prompts.py` — framing templates (the three framings), response-scale rendering (harmonized vs original, midpoint toggle), reasoning-on/off wrappers, and randomization helpers (item order, option direction, paraphrase selection). Every rendered prompt is hashed.
-- `models.py` — `ModelAdapter` ABC with two entry points: `score_item(prompt, options) -> dist` (logprob) and `sample_item(prompt, n) -> [raw]` (sampling). Implementations: `MockAdapter` (offline, deterministic-random — lets the whole pipeline run with no keys), plus stubs `HFLogprobAdapter` (transformers/vLLM — read logprobs of option tokens), `OpenAIChatAdapter`, `AnthropicChatAdapter` (constrained sampling + parse). Unify both paths to `ResponseRecord`s.
-- `runner.py` — expand the design grid, iterate cells, call the adapter, parse/validate, write JSONL; checkpoint/resume; rate-limit/retry (tenacity); `--dry-run` uses `MockAdapter` so the pipeline is runnable immediately.
-- `analysis.py` — load JSONL → tidy DataFrame → reverse-key/standardize → reliability (α/ω) → correlation matrix + clustering + EFA → order/framing/reasoning effects → item-trimming report. Heavy stats guarded behind optional imports with clear messages.
+- `core/` — shared infrastructure only: `ResponseRecord`/cell-key schema,
+  model registry and adapters, prompt primitives, the common item bank, run
+  engine, logging, statistics, and report helpers.
+- `survey/` — the self-concept battery: survey configuration, framing and scale
+  prompts, the battery grid and CLI, plus survey-only scoring, validity,
+  analysis, and plots.
+- `welfare/` — the preference instrument: its vocabulary, positive attributes,
+  prompt renderers, grid, CLI, and perturbation/transitivity report.
+- `config/survey.yaml` and `config/welfare.yaml` — separate designs, scopes,
+  trials, outputs, and fingerprints; `config/models.yaml` and
+  `config/scales/` remain shared sources.
+
+The shared `core.engine.Instrument` loop expands each module's grid, queries the
+adapter, parses and writes JSONL, and handles checkpoint/resume. `--dry-run`
+uses `MockAdapter`, so both pipelines remain runnable without keys or weights.
+Survey analysis loads only `module == "battery"`; welfare reporting loads only
+`module == "welfare"`, preventing either instrument from entering the other's
+analysis.
 
 **Libraries:** `pandas`, `numpy`, `scipy`, `pingouin` (α/ω, ANOVA), `factor_analyzer` (EFA), `semopy` (CFA, optional); model backends `transformers`+`torch` or `vllm` (logprob), `openai` / `anthropic` / `google-generativeai` (sampling); `tenacity` (retries); `pyyaml` or dataclass config; standard `json`/`jsonlines` output.
 

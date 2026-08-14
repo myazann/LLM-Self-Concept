@@ -1,5 +1,6 @@
 # Core runner/planner is stdlib + pyyaml. Analysis dependencies are listed
-# separately and remain unnecessary for `runner.py --dry-run`.
+# separately and remain unnecessary for `python -m survey.run --dry-run` or
+# `python -m welfare.run --dry-run`.
 pyyaml
 
 # --- model registry -------------------------------------------------------

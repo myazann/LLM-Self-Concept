@@ -22,16 +22,17 @@ from collections import defaultdict
 import numpy as np
 import pandas as pd
 
-from plots import plot_item_validity
-from scales import load_battery
-from scoring import (
+from survey.plots import plot_item_validity
+from core.battery import load_battery
+from survey.scoring import (
     ACQUIESCENCE_SCALE_IDS, CONDITION_KEYS, CONSTRUCTS, DEFAULT_FRAMING,
     DEFAULT_ITEM_CONTEXT, DEFAULT_METHOD, DEFAULT_PARAPHRASE,
     DEFAULT_REASONING_MODE, DEFAULT_RESPONSE_FORMAT, MIDPOINT, Saver,
+    ReportDatasetError,
     cell_frame, condition_label, construct_scores, corr,
     cronbach_alpha, default_condition, direction_of, fmt, load,
     respondent_matrix, section, select_condition, validate_default_config,
-    validate_default_slice,
+    validate_default_slice, validate_report_dataset,
 )
 
 
@@ -596,7 +597,7 @@ def dossier_md(summary, items, qc_full, qc_default):
         "\n## Interpretation rules\n",
         "- p0/p1/p2 vary the **instruction**, not the item wording.",
         "- First-person acknowledgement and third-person assistant are substantive framing "
-        "conditions. Their differences are reported by `analysis.py`, not treated as instability.",
+        "conditions. Their differences are reported by `survey.analysis`, not treated as instability.",
         "- Factor communality is deferred: 13 independent models cannot identify a "
         "45-item factor solution.",
         "- The agreement-style marker uses the exactly wording-balanced RSES items; "
@@ -614,6 +615,7 @@ def run(results_path="results.jsonl", out_dir="results/validity", save=True):
     records = load(results_path)
     cells = cell_frame(records)
     core = _core_cells(cells)
+    validate_report_dataset(core, results_path)
     default_cells = default_condition(cells)
     default_records = [r for r in records if _default_record(r)]
     validate_default_slice(default_cells, core)
@@ -700,4 +702,7 @@ if __name__ == "__main__":
     parser.add_argument("--out", default="results/validity")
     parser.add_argument("--no-save", action="store_true")
     args = parser.parse_args()
-    run(args.results, args.out, save=not args.no_save)
+    try:
+        run(args.results, args.out, save=not args.no_save)
+    except ReportDatasetError as err:
+        parser.error(str(err))
