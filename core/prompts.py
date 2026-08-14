@@ -39,6 +39,10 @@ class RenderedPrompt:
     item_text_shown: str
     prompt_hash: str
     is_completion: bool = False   # True for the base-model path
+    # What the model is asked to type, per printed option, when that is not the
+    # option value itself — welfare prints ("A", "B", "C"). Empty means the
+    # answer IS the number, as on a rating scale.
+    answer_labels: tuple = ()
 
 
 def render_scale_block(points, reverse_direction: bool = False) -> str:

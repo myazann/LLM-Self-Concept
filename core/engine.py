@@ -207,6 +207,17 @@ class Instrument(ABC):
     def describe(self, cell) -> str:
         """A short human label for this cell, used in error logs."""
 
+    # -- reading an answer -------------------------------------------------
+    def parse(self, raw: str, prompt, cell) -> tuple:
+        """-> (value|None, refusal_flag, parse_failed) for one sampled answer.
+
+        The default reads a NUMBER from the option list, which is what a rating
+        scale asks for. An instrument whose options are not numbers (welfare
+        prints lettered choices) overrides this, so the answer format stays a
+        property of the question rather than a special case in the run loop.
+        """
+        return parse_rating(raw, prompt.option_values)
+
 
 # ---------------------------------------------------------------------------
 # the loop
@@ -362,7 +373,7 @@ def run(instrument: Instrument, *, dry_run=False, model_filter=None, limit=None,
                             )
                         else:
                             raw = adapter.sample_item(prompt, n=1, plan=plan)[0]
-                            rating, refusal, failed = parse_rating(raw, prompt.option_values)
+                            rating, refusal, failed = instrument.parse(raw, prompt, cell)
                             observation = Observation(
                                 raw=raw, parsed=rating, modal=rating, dist={},
                                 refusal=refusal, parse_failed=failed, plan=plan,

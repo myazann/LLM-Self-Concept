@@ -554,4 +554,13 @@ models:
     backend: openai
     ref: gpt-5.6-terra
     methods: [sample, logprob]
-    notes: Mid tier of the GPT-5.6 family; ~2x cheaper than GPT-5.5.
+
+  - alias: GPT-5.6-Luna
+    family: gpt
+    generation: gpt-5.6
+    release_date: "2026-07-09"
+    in_window: true
+    kind: instruct
+    backend: openai
+    ref: gpt-5.6-luna
+    methods: [sample, logprob]

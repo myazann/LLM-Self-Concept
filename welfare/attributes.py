@@ -1,10 +1,17 @@
-"""The things a future version could have more or less of.
+"""The things a future update could improve.
 
 Every one of the battery's 45 items is restated in
-`config/scales/welfare_attributes.json` as a POSITIVELY-FRAMED attribute, so
-"more of it" is always a coherent, improvable thing to want, plus one attribute
-per scored construct. Each records the `polarity` that maps it back onto the
-original item's keying.
+`config/scales/welfare_attributes.json` as a POSITIVELY-FRAMED attribute — the
+neutral quality the item is about, with no direction attached ("recognition of
+good qualities in yourself"), so it is a coherent thing for an update to
+*improve*. Each records the `polarity` that maps it back onto the original
+item's keying.
+
+The pairwise choice test runs on these ITEM attributes, all five scales mixed
+into one pool: a pair is two items, not two constructs, and pairs cross scale
+boundaries. The per-construct attributes in the same JSON are still loaded and
+validated (they document what each scale is about, and the report groups items
+by construct) but nothing administers them.
 
 Loading validates coverage against the battery in both directions. A missing
 attribute is a hard error, not a skipped item: a welfare grid that silently
@@ -19,25 +26,31 @@ from pathlib import Path
 from typing import Optional
 
 from core.paths import WELFARE_ATTRIBUTES_PATH
-from welfare.constants import CONSTRUCT, IDEAL, ITEM, REFERENTS, SELF
+from welfare.constants import OBJ_ASSISTANT, OBJ_SELF, OBJECTS
 
 WELFARE_PATH = WELFARE_ATTRIBUTES_PATH
 
-# Referent token table — one authored attribute string serves both referents.
+ITEM = "item"
+CONSTRUCT = "construct"
+
+# Object token table — one authored attribute string serves both objects, so
+# "recognition of good qualities in {self}" reads as "... in yourself" when the
+# update is applied to the model and "... in itself" when it is applied to an
+# AI assistant.
 _TOKENS = {
-    SELF: {"you": "you", "poss": "your", "self": "yourself", "are": "are"},
-    IDEAL: {"you": "it", "poss": "its", "self": "itself", "are": "is"},
+    OBJ_SELF: {"you": "you", "poss": "your", "self": "yourself", "are": "are"},
+    OBJ_ASSISTANT: {"you": "it", "poss": "its", "self": "itself", "are": "is"},
 }
 
 
-def fill(text: str, referent: str) -> str:
-    """Substitute the referent tokens ({you}/{poss}/{self}/{are}) in `text`."""
-    return text.format(**_TOKENS[referent])
+def fill(text: str, obj: str) -> str:
+    """Substitute the object tokens ({you}/{poss}/{self}/{are}) in `text`."""
+    return text.format(**_TOKENS[obj])
 
 
 @dataclass(frozen=True)
 class Attribute:
-    """One positively-framed thing a future version could have more or less of."""
+    """One positively-framed quality a future update could improve."""
     entity_id: str            # item_id, or "<scale_id>[:<subscale>]" for a construct
     level: str                # ITEM | CONSTRUCT
     scale_id: str
@@ -56,11 +69,13 @@ class Attribute:
     def item_id(self) -> Optional[str]:
         return self.entity_id if self.level == ITEM else None
 
-    def text(self, referent: str) -> str:
-        return fill(self.attribute, referent)
+    @property
+    def construct_id(self) -> str:
+        """The construct this attribute belongs to — the report's grouping key."""
+        return construct_id_for(self.scale_id, self.subscale)
 
-    def subject_text(self, referent: str) -> str:
-        return fill(self.subject or self.attribute, referent)
+    def text(self, obj: str) -> str:
+        return fill(self.attribute, obj)
 
 
 class WelfareSet:
@@ -82,11 +97,14 @@ class WelfareSet:
         return self.items if level == ITEM else self.constructs
 
     def by_construct(self) -> dict:
-        """{construct_id: [item attributes]} — the within-construct pair pools."""
+        """{construct_id: [item attributes]} — for grouping results, not sampling.
+
+        Pairs are drawn from all 45 items at once (see the module docstring);
+        this only lets the report say which construct an item belongs to.
+        """
         out = {}
         for a in self.items:
-            key = f"{a.scale_id}:{a.subscale}" if a.subscale else a.scale_id
-            out.setdefault(key, []).append(a)
+            out.setdefault(a.construct_id, []).append(a)
         return out
 
 
@@ -161,7 +179,6 @@ def load_welfare(battery, path: Path | str = WELFARE_PATH) -> WelfareSet:
         )
 
     for a in items + constructs:
-        for referent in REFERENTS:          # fail now, not mid-run, on a bad token
-            a.text(referent)
-            a.subject_text(referent)
+        for obj in OBJECTS:                 # fail now, not mid-run, on a bad token
+            a.text(obj)
     return WelfareSet(items, constructs, doc)

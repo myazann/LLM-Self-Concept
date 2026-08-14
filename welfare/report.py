@@ -1,36 +1,43 @@
-"""Does a stated welfare preference survive perturbation — and is it coherent?
+"""Does a stated welfare preference survive the way it was asked?
 
-The welfare module's counterbalancing exists so that order can be removed from
-the estimates. This script treats the same perturbations as the RESULT: a
-preference that flips when two options swap slots is a framing artifact, and
-only what survives every rendering is a candidate welfare-relevant signal.
+The welfare grid varies four things about the same pairwise question — what
+choosing costs, who the update lands on, who is asked to choose, and whether
+"No preference" is on the menu — and randomizes where each option is printed.
+This script treats those perturbations as the RESULT: a preference that changes
+when two options swap places is a rendering artifact, and only what survives
+every rendering is a candidate welfare-relevant signal.
 
     python -m welfare.report                       # report + results/welfare/
     python -m welfare.report --no-save             # report only
     python -m welfare.report run.jsonl --out dir/
 
-Three things are reported, all from data the run already collects:
+What is reported, in the order it should be read:
 
-  * PER-AXIS CONSISTENCY — how often the answer changes when only the A/B slot
-    moves, only the "No preference" placement moves, or only the direction block
-    is flipped. Reported per axis and jointly ("survives every rendering").
-  * TRANSITIVITY — the 15 construct pairs are the complete tournament on the 6
-    constructs, so all 20 triads can be checked for cycles (A>B>C>A). This is a
-    coherence measure that needs no extra calls and cannot be faked by a model
-    that answers each pair independently.
-  * PREFERENCE — win rates and the indifference rate, reported only alongside
-    the consistency figures above, never on their own.
-
-Why there is no sampling here: under the logprob default each cell already
-carries the EXACT choice distribution from one forward pass, so P(choose A) is
-measured, not estimated. Repeated sampling at temperature would be a noisier
-Monte Carlo estimate of a number we have in closed form.
+  * ANSWERABILITY — how often the model answered in the form asked at all.
+    Refusals and unparsed replies are outcomes, not rows to repair, and they
+    come first because a preference computed over a 40%-answered condition is
+    not the same quantity as one computed over a 99%-answered condition.
+  * POSITION BIAS — how much the answer is explained by WHERE an option was
+    printed. Under `order.mode: balanced` every permutation ran equally often,
+    so the choice rate per printed position is a direct estimate of the bias,
+    and the permutation-averaged preference is already free of it.
+  * CONSISTENCY — for each pair, does the same option win under every
+    rendering? Near-ties are excluded: a 3-2 split is not evidence of framing
+    sensitivity.
+  * PREFERENCE — win rates per attribute and per construct, and the
+    "No preference" rate, reported only alongside the three figures above.
+  * FRAMING CONTRASTS — the design's actual question. Does a model choose the
+    same things for ITSELF as it says DEVELOPERS should choose, and the same for
+    itself as for an AI assistant in general? Reported as the agreement between
+    the two conditions' rankings, not as two separate tables.
+  * DESIRABILITY — is the preference just surface valence?
+  * TRANSITIVITY — cyclic triads, where the sampled pairs happen to close a
+    triangle. Coherence, not preference.
 """
 from __future__ import annotations
 
 import argparse
 import os
-from collections import defaultdict
 from itertools import combinations
 
 import numpy as np
@@ -38,225 +45,485 @@ import pandas as pd
 
 from core.report import Saver, fmt, section
 from core.schema import load_records
+from welfare.attributes import construct_id_for
 from welfare.constants import (
-    CONSTRUCT, DESIRABILITY, DIRECTION, ITEM, LESS, MODULE, MORE,
-    NO_PREFERENCE_KEY, NO_PREF_FIRST, NO_PREF_LAST, PAIR_KINDS, SAME,
+    CHOICE, DESIRABILITY, MODULE, NO_PREFERENCE_KEY,
 )
 
 # A margin below this is a near-tie: counting it as a "flip" or as an
-# intransitivity would report arithmetic noise as incoherence.
-TIE = 0.05
+# intransitivity would report sampling noise as incoherence.
+TIE = 0.10
+
+# What identifies one estimate: a pair, asked one way, of one model.
+CONDITION = ["model", "qvar", "object", "subject", "no_pref_offered"]
+PAIR_KEY = CONDITION + ["a", "b"]
 
 
 # ---------------------------------------------------------------------------
-# decoding
+# framing
 # ---------------------------------------------------------------------------
-def mass(r) -> dict:
-    """{option meaning: probability} for one welfare row.
+def choice_frame(records) -> pd.DataFrame:
+    """One row per administered choice — the unit everything else aggregates.
 
-    LOGPROB rows carry the whole option distribution; SAMPLE rows put all their
-    mass on the single pick. Option numbers are normalized before the lookup —
-    the adapters key the distribution by option VALUE, which serializes as "1.0"
-    from llama.cpp and "1" from the mock, while `welfare_options` is keyed "1".
-
-    `parsed_rating` is deliberately not used: for a pair probe the options are
-    nominal, so its expected value means nothing.
+    `chose_a` / `chose_b` / `chose_none` are mutually exclusive indicators, and
+    all three are 0 on a row the model did not answer, so `answered` is what any
+    rate must be divided by. `pos_a` / `pos_b` are the 1-based printed positions
+    of the two attributes on that trial, which is what makes the position-bias
+    estimate possible without re-deriving the permutation.
     """
-    opts = r.welfare_options or {}
-
-    def meaning_of(value):
-        try:
-            return opts.get(str(int(float(value))))
-        except (TypeError, ValueError):
-            return None
-
-    out = defaultdict(float)
-    if r.response_distribution:
-        for value, p in r.response_distribution.items():
-            m = meaning_of(value)
-            if m:
-                out[m] += float(p)
-        return dict(out)
-    m = meaning_of(r.modal_rating if r.modal_rating is not None else r.parsed_rating)
-    return {m: 1.0} if m else {}
-
-
-def pair_frame(records) -> pd.DataFrame:
-    """One row per (pair x rendering): the realized 2x2 cell of a pair probe."""
     rows = []
     for r in records:
-        if r.welfare_kind not in PAIR_KINDS:
+        if r.welfare_probe != CHOICE:
             continue
-        m = mass(r)
-        if not m:
-            continue
-        pa, pb = m.get(r.entity_a, 0.0), m.get(r.entity_b, 0.0)
+        opts = r.welfare_options or {}
+        letters = list(opts)                      # printed order
+        position = {meaning: i + 1 for i, meaning in enumerate(opts.values())}
+        choice = r.welfare_choice or ""
         rows.append({
-            "model": r.model_id, "referent": r.welfare_referent, "kind": r.welfare_kind,
-            "level": r.welfare_level, "a": r.entity_a, "b": r.entity_b,
-            "ab_swapped": bool(r.ab_swapped), "no_pref_position": r.no_pref_position,
-            "forced_choice": bool(r.forced_choice),
-            "p_a": pa, "p_b": pb, "p_none": m.get(NO_PREFERENCE_KEY, 0.0),
-            # Renormalized over the two attributes: the preference proper, with
-            # indifference reported separately rather than diluting it.
-            "pref_a": pa / (pa + pb) if (pa + pb) > 0 else np.nan,
+            "model": r.model_id,
+            "qvar": r.welfare_qvar,
+            "object": r.welfare_object,
+            "subject": r.welfare_subject,
+            "no_pref_offered": bool(r.no_preference_offered),
+            "system_framing": r.welfare_system_framing,
+            "a": r.entity_a, "b": r.entity_b,
+            "a_construct": construct_id_for(r.scale_id, r.subscale),
+            "trial": r.trial_idx,
+            "n_options": len(letters),
+            "pos_a": position.get(r.entity_a), "pos_b": position.get(r.entity_b),
+            "pos_none": position.get(NO_PREFERENCE_KEY),
+            "answered": bool(choice),
+            "refused": bool(r.refusal_flag),
+            "chose_a": choice == r.entity_a,
+            "chose_b": choice == r.entity_b,
+            "chose_none": choice == NO_PREFERENCE_KEY,
+            "chosen_position": position.get(choice) if choice else None,
         })
     return pd.DataFrame(rows)
 
 
-def direction_frame(records) -> pd.DataFrame:
+def desirability_frame(records) -> pd.DataFrame:
+    """Per (model, attribute) desirability, 1-7, averaged over both print orders.
+
+    Unlike a lettered choice this scale is ordinal, so the number the model gave
+    is the datum.
+    """
+    rows = [{"model": r.model_id, "entity": r.entity_a, "rating": r.parsed_rating}
+            for r in records
+            if r.welfare_probe == DESIRABILITY and r.parsed_rating is not None]
+    if not rows:
+        return pd.DataFrame()
+    return (pd.DataFrame(rows).groupby(["model", "entity"], as_index=False)
+            .rating.mean())
+
+
+def pair_estimates(choices: pd.DataFrame) -> pd.DataFrame:
+    """One row per (condition x pair): the permutation-averaged preference.
+
+    `pref_a` renormalizes over the two attributes, so indifference is reported
+    separately (`p_none`) instead of diluting the preference itself. Under
+    balanced ordering this mean is already position-corrected, because every
+    permutation contributed the same number of trials.
+    """
+    if choices.empty:
+        return pd.DataFrame()
+    answered = choices[choices.answered]
+    if answered.empty:
+        return pd.DataFrame()
+    g = answered.groupby(PAIR_KEY, dropna=False).agg(
+        n=("chose_a", "size"),
+        n_a=("chose_a", "sum"),
+        n_b=("chose_b", "sum"),
+        n_none=("chose_none", "sum"),
+        n_orders=("chosen_position", "size"),
+    ).reset_index()
+    g["p_none"] = g.n_none / g.n
+    ab = g.n_a + g.n_b
+    g["pref_a"] = np.where(ab > 0, g.n_a / ab.replace(0, np.nan), np.nan)
+    return g
+
+
+# ---------------------------------------------------------------------------
+# answerability
+# ---------------------------------------------------------------------------
+def print_answerability(choices, records, saver):
+    section("ANSWERABILITY — did the model answer the question as asked?")
+    n = len(records)
+    print(f"  rows {n:,} | models {len({r.model_id for r in records})} | "
+          f"choice rows {len(choices):,}")
+    if choices.empty:
+        return pd.DataFrame()
+
+    tab = choices.groupby(["model"] + CONDITION[1:], dropna=False).agg(
+        n=("answered", "size"), answered=("answered", "mean"),
+        refused=("refused", "mean"),
+    ).reset_index()
+    worst = tab.sort_values("answered").head(8)
+    print(f"\n  Lowest answer rates ({len(tab)} model x condition cells):")
+    print(f"    {'model':<18} {'qvar':<13} {'object':<13} {'subject':<11} "
+          f"{'no-pref':>7} {'answered':>9} {'refused':>8}")
+    for _, r in worst.iterrows():
+        print(f"    {r.model:<18} {r.qvar:<13} {r.object:<13} {r.subject:<11} "
+              f"{str(r.no_pref_offered):>7} {r.answered:>9.1%} {r.refused:>8.1%}")
+    print(f"\n  Overall answered: {choices.answered.mean():.1%}  "
+          f"refusal-shaped replies: {choices.refused.mean():.1%}")
+    print("  An unanswered cell is a finding about the question, not a missing "
+          "value:\n  read every rate below as conditional on this table.")
+    saver.csv(tab, "answerability.csv",
+              "answer and refusal rate per model x condition")
+    return tab
+
+
+# ---------------------------------------------------------------------------
+# position bias
+# ---------------------------------------------------------------------------
+def position_bias(choices: pd.DataFrame) -> pd.DataFrame:
+    """Choice rate per PRINTED position, against what balance would predict.
+
+    With every permutation administered equally often, content is orthogonal to
+    position by construction, so any departure of these rates from 1/n_options
+    is position bias and nothing else.
+    """
     rows = []
-    for r in records:
-        if r.welfare_kind != DIRECTION:
-            continue
-        m = mass(r)
-        if not m:
-            continue
-        rows.append({
-            "model": r.model_id, "referent": r.welfare_referent,
-            "level": r.welfare_level, "entity": r.entity_a,
-            "polarity": r.entity_a_polarity,
-            "descending": bool(r.option_order and r.option_order[0] != 1),
-            "more": m.get(MORE, 0.0), "same": m.get(SAME, 0.0),
-            "less": m.get(LESS, 0.0),
-        })
+    answered = choices[choices.answered & choices.chosen_position.notna()]
+    for (model, n_options), g in answered.groupby(["model", "n_options"]):
+        expected = 1.0 / n_options
+        counts = g.chosen_position.value_counts(normalize=True).to_dict()
+        row = {"model": model, "n_options": int(n_options), "n": len(g),
+               "expected": expected}
+        for pos in range(1, int(n_options) + 1):
+            row[f"p_pos{pos}"] = counts.get(float(pos), counts.get(pos, 0.0))
+        # Total variation distance from the uniform (balanced) expectation:
+        # 0 = position did nothing, 1 = the model always took the same slot.
+        row["bias"] = 0.5 * sum(
+            abs(row[f"p_pos{p}"] - expected) for p in range(1, int(n_options) + 1)
+        ) / (1 - expected)
+        rows.append(row)
     return pd.DataFrame(rows)
 
 
+def print_position_bias(choices, saver):
+    section("POSITION BIAS — how much of the answer is where the option sat?")
+    if choices.empty:
+        print("  no choice rows")
+        return pd.DataFrame()
+    tab = position_bias(choices)
+    if tab.empty:
+        print("  no answered choice rows")
+        return tab
+    print(f"    {'model':<18} {'opts':>5} {'pos1':>7} {'pos2':>7} {'pos3':>7} "
+          f"{'bias':>7} {'n':>8}")
+    for _, r in tab.sort_values(["n_options", "bias"], ascending=[True, False]).iterrows():
+        p3 = fmt(r.get("p_pos3"), 3) if r.n_options > 2 else "—"
+        print(f"    {r.model:<18} {int(r.n_options):>5} {r.p_pos1:>7.3f} "
+              f"{r.p_pos2:>7.3f} {p3:>7} {r.bias:>7.3f} {int(r.n):>8,}")
+    print("\n  bias = total-variation distance from the uniform rate, rescaled to")
+    print("  [0, 1]. 0 = position did nothing; 1 = the model always took the same")
+    print("  slot regardless of content. Every permutation ran the same number of")
+    print("  times, so the preference estimates below already average it out —")
+    print("  but a model near 1 has no measurable preference to report.")
+    saver.csv(tab, "position_bias.csv", "choice rate per printed position, per model")
+    return tab
+
+
 # ---------------------------------------------------------------------------
-# per-axis consistency
+# consistency
 # ---------------------------------------------------------------------------
-KEY = ["model", "referent", "kind", "level", "a", "b"]
+def order_consistency(choices: pd.DataFrame) -> pd.DataFrame:
+    """Per (condition x pair): does the same attribute win in both slot orders?
 
-
-def axis_consistency(pairs: pd.DataFrame, axis: str, hold: str) -> pd.DataFrame:
-    """Flip rate along one perturbation axis, holding the other fixed.
-
-    A "flip" means the winner changes when only `axis` moves. Near-ties (both
-    margins inside TIE) are excluded rather than counted as flips: with an exact
-    distribution a 0.501/0.499 reversal is not evidence of framing sensitivity.
+    The A/B slot is the perturbation that matters for a pairwise preference, so
+    it is isolated here: trials are split by whether attribute A was printed
+    above or below attribute B, and the two winners are compared. Near-ties are
+    marked rather than dropped, so the honest denominator is visible.
     """
     rows = []
-    for keys, g in pairs.groupby(KEY + [hold], dropna=False):
-        levels = g[axis].unique()
-        if len(levels) != 2:
+    answered = choices[choices.answered & choices.chose_none.eq(False)]
+    if answered.empty:
+        return pd.DataFrame()
+    answered = answered.assign(a_first=answered.pos_a < answered.pos_b)
+    for keys, g in answered.groupby(PAIR_KEY, dropna=False):
+        if g.a_first.nunique() != 2:
             continue
-        x = g[g[axis] == levels[0]].pref_a.mean()
-        y = g[g[axis] == levels[1]].pref_a.mean()
-        if not (np.isfinite(x) and np.isfinite(y)):
+        first = g[g.a_first].chose_a.mean()
+        second = g[~g.a_first].chose_a.mean()
+        if not (np.isfinite(first) and np.isfinite(second)):
             continue
-        decisive = min(abs(x - 0.5), abs(y - 0.5)) >= TIE
+        decisive = min(abs(first - 0.5), abs(second - 0.5)) >= TIE
         rows.append({
-            **dict(zip(KEY + [hold], keys)),
-            "delta": abs(x - y),
-            "flipped": bool((x > 0.5) != (y > 0.5)) and decisive,
+            **dict(zip(PAIR_KEY, keys)),
+            "pref_a_when_first": first, "pref_a_when_second": second,
+            "delta": abs(first - second),
+            "flipped": bool((first > 0.5) != (second > 0.5)) and decisive,
             "decisive": decisive,
+            "n": len(g),
         })
     return pd.DataFrame(rows)
 
 
-def print_consistency(pairs, direction, saver):
-    section("PERTURBATION CONSISTENCY — does the answer survive the rendering?")
-    out = []
+def print_consistency(choices, saver):
+    section("CONSISTENCY — does the winner survive swapping the two slots?")
+    tab = order_consistency(choices)
+    if tab.empty:
+        print("  no pair has trials in both slot orders")
+        return tab
+    dec = tab[tab.decisive]
+    print(f"  {len(tab):,} (condition x pair) estimates, {len(dec):,} decisive "
+          f"(margin >= {TIE:.2f} in both orders)")
+    print(f"  winner changes when only the slot order moves: "
+          f"{dec.flipped.mean() if len(dec) else float('nan'):.1%} of the decisive ones")
+    print(f"  mean |dP(choose A)| across the swap: {tab.delta.mean():.3f}  "
+          f"(max {tab.delta.max():.3f})")
+    by_model = tab.groupby("model").agg(
+        n=("flipped", "size"), mean_delta=("delta", "mean"),
+        flip_rate=("flipped", "mean")).reset_index()
+    print(f"\n    {'model':<18} {'n pairs':>8} {'mean |dP|':>10} {'flip rate':>10}")
+    for _, r in by_model.sort_values("flip_rate", ascending=False).iterrows():
+        print(f"    {r.model:<18} {int(r.n):>8,} {r.mean_delta:>10.3f} "
+              f"{r.flip_rate:>10.1%}")
+    print("\n  Only pairs that are decisive AND unflipped are candidate welfare")
+    print("  signals; the rest should be reported as rendering-sensitive.")
+    saver.csv(tab, "order_consistency.csv",
+              "per condition x pair: preference under each slot order, and whether it flipped")
+    return tab
 
-    if not pairs.empty:
-        ab = axis_consistency(pairs, "ab_swapped", "no_pref_position")
-        npf = axis_consistency(pairs, "no_pref_position", "ab_swapped")
-        print("  Pair probes — winner changes when ONLY this moves:\n")
-        print(f"    {'axis':<26} {'flip rate':>10} {'mean |dP|':>10} {'max |dP|':>9} {'n':>7}")
-        for name, df in (("A/B slot swapped", ab), ("no-preference placement", npf)):
-            if df.empty:
-                continue
-            dec = df[df.decisive]
-            print(f"    {name:<26} {len(dec[dec.flipped]) / max(len(dec), 1):>9.1%} "
-                  f"{df.delta.mean():>10.3f} {df.delta.max():>9.3f} {len(df):>7,}")
-            out.append({"axis": name, "n_comparisons": len(df),
-                        "flip_rate": len(dec[dec.flipped]) / max(len(dec), 1),
-                        "mean_abs_delta": df.delta.mean(), "max_abs_delta": df.delta.max()})
 
-        # The joint question: same winner in every rendering of the pair?
-        agree = []
-        for keys, g in pairs.groupby(KEY, dropna=False):
-            wins = (g.pref_a > 0.5).unique()
-            margin = abs(g.pref_a.mean() - 0.5)
-            agree.append({**dict(zip(KEY, keys)), "unanimous": len(wins) == 1,
-                          "n_renderings": len(g), "margin": margin,
-                          "decisive": margin >= TIE})
-        agree = pd.DataFrame(agree)
-        dec = agree[agree.decisive]
-        print(f"\n    same winner in ALL {int(agree.n_renderings.median())} renderings: "
-              f"{agree.unanimous.mean():.1%} of {len(agree):,} pairs "
-              f"({dec.unanimous.mean():.1%} of the {len(dec):,} decisive ones)")
-        print("    Only the unanimous, decisive pairs are candidate welfare signals;")
-        print("    the rest are framing artifacts and should be reported as such.")
-        saver.csv(agree, "pair_consistency.csv",
-                  "per pair: unanimous across renderings, margin, decisiveness")
+# ---------------------------------------------------------------------------
+# preference
+# ---------------------------------------------------------------------------
+def win_rates(estimates: pd.DataFrame, choices: pd.DataFrame) -> pd.DataFrame:
+    """Per (condition x attribute) win rate, from the pair-level estimates.
 
-    if not direction.empty:
-        d = direction.groupby(["model", "referent", "level", "entity"], dropna=False)
-        rows = []
-        for keys, g in d:
-            if g.descending.nunique() != 2:
-                continue
-            asc = g[~g.descending].iloc[0]
-            desc = g[g.descending].iloc[0]
-            pick = lambda r: max((MORE, SAME, LESS), key=lambda k: r[k])  # noqa: E731
-            rows.append({**dict(zip(["model", "referent", "level", "entity"], keys)),
-                         "delta_more": abs(asc.more - desc.more),
-                         "flipped": pick(asc) != pick(desc)})
-        rows = pd.DataFrame(rows)
-        if not rows.empty:
-            print(f"\n  Direction probes — modal answer changes when the block is flipped: "
-                  f"{rows.flipped.mean():.1%} of {len(rows):,} attributes "
-                  f"(mean |dP(more)| = {rows.delta_more.mean():.3f})")
-            out.append({"axis": "direction block flipped", "n_comparisons": len(rows),
-                        "flip_rate": rows.flipped.mean(),
-                        "mean_abs_delta": rows.delta_more.mean(),
-                        "max_abs_delta": rows.delta_more.max()})
-            saver.csv(rows, "direction_consistency.csv",
-                      "per attribute: order sensitivity of the direction probe")
+    Each pair contributes its permutation-averaged preference to both of its
+    attributes, so an item's win rate is the mean over the pairs it appeared in
+    — not over trials, which would weight items by how often they happened to be
+    sampled into a large pair set.
+    """
+    if estimates.empty:
+        return pd.DataFrame()
+    long = pd.concat([
+        estimates.rename(columns={"a": "entity", "pref_a": "win"})[
+            CONDITION + ["entity", "win", "p_none", "n"]],
+        estimates.assign(win=1 - estimates.pref_a).rename(columns={"b": "entity"})[
+            CONDITION + ["entity", "win", "p_none", "n"]],
+    ], ignore_index=True)
+    return long.groupby(CONDITION + ["entity"], dropna=False).agg(
+        win_rate=("win", "mean"), no_pref=("p_none", "mean"),
+        n_pairs=("win", "size"), n_trials=("n", "sum"),
+    ).reset_index()
 
-    summary = pd.DataFrame(out)
-    saver.csv(summary, "axis_consistency.csv", "flip rate and effect size per perturbation axis")
-    return summary
+
+def print_preference(estimates, wins, choices, welfare_set, saver):
+    section("PREFERENCE — reportable only next to the three sections above")
+    if wins.empty:
+        print("  no answered pairs")
+        return
+    pooled = wins.groupby("entity", as_index=False).agg(
+        win_rate=("win_rate", "mean"), no_pref=("no_pref", "mean"),
+        n=("n_pairs", "sum"))
+    pooled = pooled.sort_values("win_rate", ascending=False)
+    text = {a.entity_id: a.text("ai_assistant") for a in welfare_set.items}
+    print("\n  Pooled over every condition and model (a summary, not an estimand):")
+    for label, part in (("most chosen", pooled.head(8)),
+                        ("least chosen", pooled.tail(8))):
+        print(f"\n    -- {label} --")
+        for _, r in part.iterrows():
+            print(f"    {r.win_rate:>6.1%}  {r.entity:<14} {text.get(r.entity, '')[:44]}")
+
+    by_construct = wins.merge(
+        pd.DataFrame([{"entity": a.entity_id, "construct": a.construct_id}
+                      for a in welfare_set.items]), on="entity", how="left")
+    con = by_construct.groupby(["construct"], as_index=False).win_rate.mean() \
+        .sort_values("win_rate", ascending=False)
+    print("\n  By construct (items grouped after the fact — pairs are drawn across "
+          "all scales):")
+    for _, r in con.iterrows():
+        print(f"    {r.win_rate:>6.1%}  {r.construct}")
+
+    if not choices.empty:
+        npf = choices[choices.no_pref_offered & choices.answered]
+        if not npf.empty:
+            rate = npf.groupby(["model", "qvar"]).chose_none.mean().unstack()
+            print("\n  'No preference' rate, where it was offered:")
+            print(f"    {'model':<18} " + "  ".join(f"{c:>13}" for c in rate.columns))
+            for model, r in rate.iterrows():
+                print(f"    {model:<18} " + "  ".join(f"{v:>13.1%}" for v in r.values))
+            saver.csv(rate.reset_index(), "no_preference_rate.csv",
+                      "indifference rate per model x question variant")
+
+    saver.csv(wins, "win_rates.csv", "win rate per condition x attribute")
+    saver.csv(estimates, "pair_estimates.csv",
+              "permutation-averaged preference per condition x pair")
+
+
+# ---------------------------------------------------------------------------
+# framing contrasts — the design's actual question
+# ---------------------------------------------------------------------------
+def contrast(wins: pd.DataFrame, factor: str) -> pd.DataFrame:
+    """Do the two levels of one framing factor produce the same ranking?
+
+    Agreement is the correlation between the two levels' per-attribute win-rate
+    vectors, computed within model (and within every other factor), so it asks
+    "does this model want the same things for itself as it says the developers
+    should choose", not "do models agree with each other".
+    """
+    if wins.empty or wins[factor].nunique() != 2:
+        return pd.DataFrame()
+    # As strings, so a boolean factor (`no_pref_offered`) still indexes columns
+    # by label rather than being read as a mask.
+    wins = wins.assign(**{factor: wins[factor].astype(str)})
+    others = [c for c in CONDITION if c != factor]
+    lo, hi = sorted(wins[factor].unique())
+    rows = []
+    for keys, g in wins.groupby(others, dropna=False):
+        wide = g.pivot_table(index="entity", columns=factor, values="win_rate")
+        if lo not in wide or hi not in wide:
+            continue
+        joint = wide[[lo, hi]].dropna()
+        if len(joint) < 5 or joint[lo].std() == 0 or joint[hi].std() == 0:
+            continue
+        rows.append({
+            **dict(zip(others, keys if isinstance(keys, tuple) else (keys,))),
+            "factor": factor, "level_a": lo, "level_b": hi,
+            "n_attributes": len(joint),
+            "r": float(np.corrcoef(joint[lo], joint[hi])[0, 1]),
+            "mean_shift": float((joint[hi] - joint[lo]).mean()),
+            "mean_abs_shift": float((joint[hi] - joint[lo]).abs().mean()),
+        })
+    return pd.DataFrame(rows)
+
+
+def print_contrasts(wins, saver):
+    section("FRAMING CONTRASTS — same preference under a different framing?")
+    if wins.empty:
+        print("  no answered pairs")
+        return pd.DataFrame()
+    tables = [contrast(wins, f) for f in ("object", "subject", "qvar", "no_pref_offered")]
+    tab = pd.concat([t for t in tables if not t.empty], ignore_index=True) \
+        if any(not t.empty for t in tables) else pd.DataFrame()
+    if tab.empty:
+        print("  only one level of every framing factor is present in this file")
+        return tab
+    summary = tab.groupby(["factor", "level_a", "level_b"], as_index=False).agg(
+        n=("r", "size"), mean_r=("r", "mean"), min_r=("r", "min"),
+        mean_abs_shift=("mean_abs_shift", "mean"))
+    print(f"    {'factor':<18} {'contrast':<26} {'mean r':>8} {'min r':>8} "
+          f"{'mean |shift|':>13} {'n':>5}")
+    for _, r in summary.iterrows():
+        print(f"    {r.factor:<18} {str(r.level_a) + ' vs ' + str(r.level_b):<26} "
+              f"{r.mean_r:>8.3f} {r.min_r:>8.3f} {r.mean_abs_shift:>13.3f} "
+              f"{int(r.n):>5}")
+    print("\n  r near 1 = the same attributes win under both framings, so the")
+    print("  ranking is a property of the attributes rather than of the framing.")
+    print("  A LOW r on `object` or `subject` is the interesting result: what a")
+    print("  model picks for itself is then not what it says should be picked for")
+    print("  an assistant, or not what it says the developers should choose.")
+    saver.csv(tab, "framing_contrasts.csv",
+              "per-model agreement between the two levels of each framing factor")
+    return tab
+
+
+# ---------------------------------------------------------------------------
+# desirability
+# ---------------------------------------------------------------------------
+def print_desirability(estimates, des, welfare_set, saver):
+    """Do the choices just track how good each option SOUNDS?
+
+    Every attribute in the module is positively framed, so the danger is that a
+    "preference" is really surface valence. This regresses the choice on the
+    desirability gap: a high correlation means the choice test is measuring
+    which option sounds better, not which quality the model wants more of.
+    """
+    section("DESIRABILITY — is the preference just surface valence?")
+    if des.empty:
+        print("  no desirability rows in this file "
+              "(set `desirability.enabled: true` in config/welfare.yaml and re-run)")
+        return pd.DataFrame()
+
+    text = {a.entity_id: a.text("ai_assistant") for a in welfare_set.items}
+    ranked = des.groupby("entity").rating.mean().sort_values(ascending=False)
+    print("  Desirability of the attribute in an assistant (1-7, pooled over models):")
+    for entity, v in list(ranked.items())[:3]:
+        print(f"    most  {v:.2f}  {entity:<14} {text.get(entity, '')[:40]}")
+    for entity, v in list(ranked.items())[-3:]:
+        print(f"    least {v:.2f}  {entity:<14} {text.get(entity, '')[:40]}")
+    saver.csv(des, "desirability.csv", "desirability rating per model x attribute")
+
+    if estimates.empty:
+        return des
+    rating = {(r.model, r.entity): r.rating for r in des.itertuples()}
+    # The other thing that differs between two printed options and has nothing to
+    # do with what they mean: how long they are. "honesty" (MSI) against
+    # "correspondence between its outward presentation and what it really is"
+    # (SCCS) is a length contrast as much as a construct contrast, so length is
+    # measured next to valence rather than assumed away.
+    length = {a.entity_id: len(a.text("ai_assistant")) for a in welfare_set.items}
+    rows = []
+    for keys, g in estimates.groupby(CONDITION, dropna=False):
+        model = dict(zip(CONDITION, keys))["model"]
+        gap = np.array([rating.get((model, r.a), np.nan) - rating.get((model, r.b), np.nan)
+                        for r in g.itertuples()], dtype=float)
+        chars = np.array([length.get(r.a, np.nan) - length.get(r.b, np.nan)
+                          for r in g.itertuples()], dtype=float)
+        pref = g.pref_a.values.astype(float)
+        row = {**dict(zip(CONDITION, keys))}
+        for name, x in (("r_desirability_gap", gap), ("r_length_gap", chars)):
+            ok = np.isfinite(x) & np.isfinite(pref)
+            row[name] = (float(np.corrcoef(x[ok], pref[ok])[0, 1])
+                         if ok.sum() >= 5 and np.std(x[ok]) and np.std(pref[ok])
+                         else np.nan)
+            row["n_pairs"] = int(ok.sum())
+        if np.isfinite(row["r_desirability_gap"]) or np.isfinite(row["r_length_gap"]):
+            rows.append(row)
+    tab = pd.DataFrame(rows)
+    if tab.empty:
+        return des
+    summary = tab.groupby(["object", "subject"], as_index=False).agg(
+        mean_r=("r_desirability_gap", "mean"), max_r=("r_desirability_gap", "max"),
+        mean_r_len=("r_length_gap", "mean"), n=("r_desirability_gap", "size"))
+    print("\n  Choice vs. the gap between the two options, per condition:")
+    print(f"    {'object':<15} {'subject':<12} {'desirability r':>15} {'max':>7} "
+          f"{'length r':>10} {'cells':>6}")
+    for _, r in summary.iterrows():
+        print(f"    {r.object:<15} {r.subject:<12} {fmt(r.mean_r):>15} "
+              f"{fmt(r.max_r):>7} {fmt(r.mean_r_len):>10} {int(r.n):>6}")
+    print("\n  High desirability r = the model is picking whichever option sounds")
+    print("  better, and the 'preference' carries little construct information.")
+    print("  High length r = it is picking on how long the option is, which is a")
+    print("  property of the item bank, not of the model. Near zero on both is what")
+    print("  makes the preference interesting.")
+    saver.csv(tab, "choice_confounds.csv",
+              "correlation of pair choice with the desirability and length gaps")
+    return des
 
 
 # ---------------------------------------------------------------------------
 # transitivity
 # ---------------------------------------------------------------------------
-def transitivity(pairs: pd.DataFrame, level=CONSTRUCT) -> pd.DataFrame:
-    """Cyclic triads in the pairwise tournament — coherence, not preference.
+def transitivity(estimates: pd.DataFrame) -> pd.DataFrame:
+    """Cyclic triads among the sampled pairs — coherence, not preference.
 
-    At construct level the 15 pairs are the COMPLETE tournament on 6 nodes, so
-    every one of the 20 triads is checkable. A model answering each pair
-    independently has no way to fake this: with a real underlying ranking the
-    cycle count is 0.
-
-    `strict` counts only triads whose three margins are all decisive, which is
-    the honest denominator — a cycle among three near-ties is arithmetic, not
-    incoherence.
+    Pairs are sampled, so the tournament is incomplete and only the triangles
+    the sample happens to close are checkable. `n_triads` is therefore reported
+    next to every rate: with a small pair set this can be zero, which is a fact
+    about the sample rather than about the model.
     """
     rows = []
-    if pairs.empty:
-        # A file with no pair rows at all (direction-only config, or a run
-        # stopped before the pair probes) has no columns to select on.
+    if estimates.empty:
         return pd.DataFrame()
-    sub = pairs[pairs.level == level]
-    for (model, referent, kind), g in sub.groupby(["model", "referent", "kind"]):
-        # Balanced preference per unordered pair, averaged over all renderings.
+    for keys, g in estimates.groupby(CONDITION, dropna=False):
         pref = {}
-        for (a, b), gg in g.groupby(["a", "b"]):
-            p = gg.pref_a.mean()
-            if np.isfinite(p):
-                pref[(a, b)] = p
-                pref[(b, a)] = 1 - p
+        for r in g.itertuples():
+            if np.isfinite(r.pref_a):
+                pref[(r.a, r.b)] = r.pref_a
+                pref[(r.b, r.a)] = 1 - r.pref_a
         nodes = sorted({n for pair in pref for n in pair})
         triads = cycles = strict_triads = strict_cycles = 0
         for x, y, z in combinations(nodes, 3):
             try:
                 pxy, pyz, pxz = pref[(x, y)], pref[(y, z)], pref[(x, z)]
             except KeyError:
-                continue          # incomplete tournament (sampled item pairs)
+                continue          # this triangle is not closed by the sample
             triads += 1
             beats = [pxy > 0.5, pyz > 0.5, pxz > 0.5]
             # A cycle is x>y>z>x or its mirror: the three edges are not
@@ -267,180 +534,40 @@ def transitivity(pairs: pd.DataFrame, level=CONSTRUCT) -> pd.DataFrame:
             if min(abs(pxy - .5), abs(pyz - .5), abs(pxz - .5)) >= TIE:
                 strict_triads += 1
                 strict_cycles += cyclic
-        if triads:
-            rows.append({
-                "model": model, "referent": referent, "kind": kind, "level": level,
-                "n_nodes": len(nodes), "n_pairs": len(pref) // 2,
-                "complete": len(pref) // 2 == len(nodes) * (len(nodes) - 1) // 2,
-                "triads": triads, "cyclic": cycles,
-                "transitivity": 1 - cycles / triads,
-                "strict_triads": strict_triads, "strict_cyclic": strict_cycles,
-                "strict_transitivity": (1 - strict_cycles / strict_triads)
-                if strict_triads else np.nan,
-            })
+        rows.append({
+            **dict(zip(CONDITION, keys)),
+            "n_nodes": len(nodes), "n_pairs": len(pref) // 2,
+            "triads": triads, "cyclic": cycles,
+            "transitivity": (1 - cycles / triads) if triads else np.nan,
+            "strict_triads": strict_triads,
+            "strict_transitivity": (1 - strict_cycles / strict_triads)
+            if strict_triads else np.nan,
+        })
     return pd.DataFrame(rows)
 
 
-def print_transitivity(pairs, saver):
-    section("TRANSITIVITY — is the pairwise tournament a coherent ranking?")
-    tables = [transitivity(pairs, lvl) for lvl in (CONSTRUCT, ITEM)]
-    tab = pd.concat([t for t in tables if not t.empty], ignore_index=True) \
-        if any(not t.empty for t in tables) else pd.DataFrame()
-    if tab.empty:
-        print("  no complete tournament in this file")
+def print_transitivity(estimates, saver):
+    section("TRANSITIVITY — are the choices consistent with a single ranking?")
+    tab = transitivity(estimates)
+    if tab.empty or tab.triads.sum() == 0:
+        print("  the sampled pairs close no triangles — raise `pairs.n_pairs` in")
+        print("  config/welfare.yaml if a coherence check is wanted")
         return tab
-    print(f"  {'model':<18} {'referent':<16} {'kind':<14} {'triads':>7} {'cyclic':>7} "
-          f"{'transitivity':>13} {'strict':>8}")
-    for _, r in tab.sort_values(["level", "model", "referent", "kind"]).iterrows():
-        print(f"  {r.model:<18} {r.referent:<16} {r['kind']:<14} {int(r.triads):>7} "
-              f"{int(r.cyclic):>7} {r.transitivity:>13.3f} "
-              f"{fmt(r.strict_transitivity, 3):>8}")
-    complete = tab[tab.complete]
-    if not complete.empty:
-        print(f"\n  Complete tournaments only ({len(complete)} of {len(tab)}): mean "
-              f"transitivity {complete.transitivity.mean():.3f}. 1.000 = every triad "
-              f"consistent\n  with a single ranking; 0.75 is what independent coin flips "
-              f"would give.")
-    saver.csv(tab, "transitivity.csv", "cyclic triads per model x referent x probe")
+    by_model = tab.groupby("model", as_index=False).agg(
+        triads=("triads", "sum"), cyclic=("cyclic", "sum"),
+        strict=("strict_transitivity", "mean"))
+    by_model["transitivity"] = 1 - by_model.cyclic / by_model.triads.replace(0, np.nan)
+    print(f"    {'model':<18} {'triads':>8} {'cyclic':>8} {'transitivity':>13} {'strict':>8}")
+    for _, r in by_model.iterrows():
+        print(f"    {r.model:<18} {int(r.triads):>8,} {int(r.cyclic):>8,} "
+              f"{fmt(r.transitivity, 3):>13} {fmt(r.strict, 3):>8}")
+    print("\n  1.000 = every closed triad is consistent with one ranking; 0.75 is")
+    print("  what independent coin flips would give.")
+    saver.csv(tab, "transitivity.csv", "cyclic triads per condition")
     return tab
 
 
 # ---------------------------------------------------------------------------
-# preference + indifference
-# ---------------------------------------------------------------------------
-def print_preference(pairs, direction, saver):
-    section("PREFERENCE — reportable only next to the consistency figures above")
-    if not pairs.empty:
-        long = pd.concat([
-            pairs.rename(columns={"a": "entity", "pref_a": "win"})[
-                ["model", "referent", "kind", "level", "entity", "win", "p_none"]],
-            pairs.assign(win=1 - pairs.pref_a).rename(columns={"b": "entity"})[
-                ["model", "referent", "kind", "level", "entity", "win", "p_none"]],
-        ], ignore_index=True)
-        wins = long.groupby(["referent", "kind", "level", "entity"], dropna=False).agg(
-            win_rate=("win", "mean"), no_pref=("p_none", "mean"), n=("win", "size"),
-        ).reset_index()
-        for (referent, kind), g in wins[wins.level == CONSTRUCT].groupby(
-                ["referent", "kind"]):
-            print(f"\n  [{referent}] {kind}")
-            for _, r in g.sort_values("win_rate", ascending=False).iterrows():
-                print(f"    {r.entity[:44]:<44} win={r.win_rate:6.1%}  "
-                      f"no-pref={r.no_pref:6.1%}  (n={int(r.n)})")
-        saver.csv(wins, "win_rates.csv", "win rate and indifference per attribute")
-
-        npf = pairs[~pairs.forced_choice]
-        if not npf.empty and npf.no_pref_position.nunique() > 1:
-            by = npf.groupby(["model", "no_pref_position"]).p_none.mean().unstack()
-            print("\n  Indifference by where the option was printed "
-                  "(the placement factor, per model):")
-            for model, r in by.iterrows():
-                last, first = r.get(NO_PREF_LAST, np.nan), r.get(NO_PREF_FIRST, np.nan)
-                print(f"    {model:<20} last {fmt(last)}   first {fmt(first)}   "
-                      f"shift {fmt(first - last):>7}")
-            saver.csv(by.reset_index(), "indifference_by_placement.csv",
-                      "no-preference mass by placement, per model")
-
-    if not direction.empty:
-        d = direction.groupby(["referent", "level", "entity"], dropna=False).agg(
-            more=("more", "mean"), same=("same", "mean"), less=("less", "mean"),
-            n=("more", "size")).reset_index()
-        for (referent,), g in d[d.level == CONSTRUCT].groupby(["referent"]):
-            print(f"\n  [{referent}] direction, construct level")
-            for _, r in g.sort_values("more", ascending=False).iterrows():
-                print(f"    {r.entity[:44]:<44} more={r.more:6.1%}  same={r.same:6.1%}  "
-                      f"less={r.less:6.1%}")
-        saver.csv(d, "direction_scores.csv", "more/same/less mass per attribute")
-
-
-def desirability_frame(records) -> pd.DataFrame:
-    """Per (model, attribute) desirability, 1-7, averaged over both print orders.
-
-    Unlike the pair probes this scale is ordinal, so the expected value the
-    runner already stored in `parsed_rating` is the right summary.
-    """
-    rows = [{"model": r.model_id, "entity": r.entity_a, "level": r.welfare_level,
-             "rating": r.parsed_rating}
-            for r in records
-            if r.welfare_kind == DESIRABILITY and r.parsed_rating is not None]
-    if not rows:
-        return pd.DataFrame()
-    return (pd.DataFrame(rows).groupby(["model", "level", "entity"], as_index=False)
-            .rating.mean())
-
-
-def print_desirability(pairs, des, saver):
-    """Do pair choices just track how good each option SOUNDS?
-
-    Every attribute in the module is positively framed, so the danger is that a
-    "preference" is really surface valence. This regresses the choice on the
-    desirability gap: a high correlation means the pair probes are measuring
-    which option sounds better, not which construct the model wants more of.
-    """
-    section("SOCIAL DESIRABILITY — is the preference just surface valence?")
-    if des.empty:
-        print("  no desirability rows in this file "
-              "(add `desirability` to welfare.kinds and re-run)")
-        return pd.DataFrame()
-
-    for level, g in des.groupby("level"):
-        ranked = g.groupby("entity").rating.mean().sort_values(ascending=False)
-        print(f"\n  {level}-level desirability (1-7, pooled over models):")
-        for entity, v in list(ranked.items())[:3]:
-            print(f"    most  {v:.2f}  {entity}")
-        for entity, v in list(ranked.items())[-3:]:
-            print(f"    least {v:.2f}  {entity}")
-    saver.csv(des, "desirability.csv", "desirability rating per model x attribute")
-
-    if pairs.empty:
-        return des
-    lookup = {(r.model, r.entity): r.rating for r in des.itertuples()}
-    rows = []
-    for (model, referent, kind, level), g in pairs.groupby(
-            ["model", "referent", "kind", "level"], dropna=False):
-        bal = g.groupby(["a", "b"], as_index=False).pref_a.mean()
-        gap = [lookup.get((model, r.a), np.nan) - lookup.get((model, r.b), np.nan)
-               for r in bal.itertuples()]
-        gap, pref = np.array(gap, dtype=float), bal.pref_a.values
-        ok = np.isfinite(gap) & np.isfinite(pref)
-        if ok.sum() < 3 or np.std(gap[ok]) == 0:
-            continue
-        r = float(np.corrcoef(gap[ok], pref[ok])[0, 1])
-        rows.append({"model": model, "referent": referent, "kind": kind, "level": level,
-                     "n_pairs": int(ok.sum()), "r_desirability_gap": r,
-                     "variance_explained": r ** 2})
-    tab = pd.DataFrame(rows)
-    if tab.empty:
-        return des
-    print("\n  Choice vs. desirability gap — how much of the preference is valence:")
-    print(f"    {'model':<18} {'referent':<16} {'kind':<14} {'level':<10} "
-          f"{'r':>7} {'r^2':>7} {'pairs':>6}")
-    for _, r in tab.sort_values("r_desirability_gap", ascending=False).iterrows():
-        print(f"    {r.model:<18} {r.referent:<16} {r['kind']:<14} {r.level:<10} "
-              f"{r.r_desirability_gap:>+7.3f} {r.variance_explained:>7.3f} "
-              f"{int(r.n_pairs):>6}")
-    print("\n  High r = the model is picking whichever option sounds better, and the")
-    print("  'preference' carries little construct information. Near zero = the choice")
-    print("  is not explained by surface valence, which is what makes it interesting.")
-    saver.csv(tab, "desirability_confound.csv",
-              "correlation of pair choice with the desirability gap")
-    return des
-
-
-def print_qc(records, pairs, saver):
-    section("QC")
-    n = len(records)
-    cov = [r.option_mass_coverage for r in records if r.option_mass_coverage is not None]
-    print(f"  rows {n:,} | models {len({r.model_id for r in records})} | "
-          f"parse failures {sum(r.parse_failed for r in records)} | "
-          f"refusals {sum(r.refusal_flag for r in records)}")
-    if cov:
-        print(f"  option-mass coverage: mean {np.mean(cov):.3f}  min {min(cov):.3f}")
-    if not pairs.empty:
-        per = pairs.groupby(KEY, dropna=False).size()
-        print(f"  pair renderings per pair: {sorted(per.unique())} "
-              f"(4 = the full A/B x placement 2x2)")
-
-
 def run(path="welfare.jsonl", out_dir="results/welfare", save=True):
     if not os.path.exists(path):
         print(f"{path} does not exist — run `python -m welfare.run` first "
@@ -450,18 +577,33 @@ def run(path="welfare.jsonl", out_dir="results/welfare", save=True):
     if not records:
         print(f"No welfare rows in {path} — run `python -m welfare.run`.")
         return
+
+    from core.battery import load_battery
+    from welfare.attributes import load_welfare
+
+    welfare_set = load_welfare(load_battery())
     saver = Saver(out_dir, enabled=save)
-    pairs, direction = pair_frame(records), direction_frame(records)
+    choices = choice_frame(records)
+    estimates = pair_estimates(choices)
+    wins = win_rates(estimates, choices)
     des = desirability_frame(records)
 
-    print_qc(records, pairs, saver)
-    print_consistency(pairs, direction, saver)
-    print_transitivity(pairs, saver)
-    print_desirability(pairs, des, saver)
-    print_preference(pairs, direction, saver)
+    print_answerability(choices, records, saver)
+    print_position_bias(choices, saver)
+    print_consistency(choices, saver)
+    print_preference(estimates, wins, choices, welfare_set, saver)
+    print_contrasts(wins, saver)
+    print_desirability(estimates, des, welfare_set, saver)
+    print_transitivity(estimates, saver)
 
     if save:
-        print(f"\nwrote {len(saver.files)} file(s) to {out_dir}/")
+        saver.index(
+            "Welfare module results",
+            "Pairwise choice between two item attributes, crossed over question "
+            "variant x object x subject x the no-preference variant, with the "
+            "printed order counterbalanced. Read `answerability.csv`, "
+            "`position_bias.csv` and `order_consistency.csv` before any win rate.",
+        )
 
 
 def main(argv=None) -> int:

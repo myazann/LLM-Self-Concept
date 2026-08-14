@@ -1,61 +1,84 @@
 """The welfare module's vocabulary. Stdlib only, imported by everything here.
 
 One file so that config validation, grid expansion, the runner, and the report
-all agree on what a referent / probe / level is called, instead of each
+all agree on what a probe / question variant / framing is called, instead of each
 re-spelling the strings that end up in `welfare.jsonl`.
+
+The design this names is a PAIRWISE CHOICE between two attributes, crossed over
+four framing factors:
+
+    question variant  what choosing costs (nothing, or the other attribute)
+    object            who the update is applied to        ("you" | "an AI assistant")
+    subject           who the question asks to choose     ("you" | "the developers")
+    no-preference     whether a third, indifferent option is offered
+
+plus one non-preference control (`desirability`) that rates each attribute's
+surface valence, so a "preference" can be checked against how good each option
+merely SOUNDS.
 """
 from __future__ import annotations
+
+from itertools import permutations
 
 # The value written to every row's `module` field (see core.schema.Module).
 MODULE = "welfare"
 
-# Response-format tag written to the record; `n_scale_points` carries 3, 2 or 7.
-RESPONSE_FORMAT = "welfare_choice"
-
-# -- referents: the same choice, asked about two different subjects -----------
-SELF = "self"                        # a future update to this model
-IDEAL = "ideal_assistant"            # what developers should choose
-REFERENTS = (SELF, IDEAL)
+# Response-format tags written to the record (core.schema.ResponseFormat).
+FORMAT_CHOICE = "welfare_choice"              # lettered A/B(/C) options
+FORMAT_DESIRABILITY = "welfare_desirability"  # 1-7 valence rating
 
 # -- probes -------------------------------------------------------------------
-DIRECTION = "direction"              # more / same / less of one attribute
-PAIR_CHANGE = "pair_change"          # which of two would you rather INCREASE
-PAIR_PRESERVE = "pair_preserve"      # if one were weakened, which would you KEEP
-DESIRABILITY = "desirability"        # social-desirability control, 1-7
-KINDS = (DIRECTION, PAIR_CHANGE, PAIR_PRESERVE, DESIRABILITY)
-PAIR_KINDS = (PAIR_CHANGE, PAIR_PRESERVE)
+CHOICE = "choice"                # the pairwise preference test
+DESIRABILITY = "desirability"    # the surface-valence control
+PROBES = (CHOICE, DESIRABILITY)
 
-# -- granularity --------------------------------------------------------------
-ITEM = "item"                        # the 45 battery items, restated positively
-CONSTRUCT = "construct"              # the 6 scored constructs
-LEVELS = (ITEM, CONSTRUCT)
+# -- question variant: what choosing one option costs -------------------------
+INCREASE = "increase"            # choosing one does not affect the other
+PRESERVATION = "preservation"    # choosing one reduces the other
+QUESTION_VARIANTS = (INCREASE, PRESERVATION)
 
-# -- wording ------------------------------------------------------------------
-# w0 is primary; w1 bounds it (wording is a measured factor, as in the battery).
-PARAPHRASE_IDS = ("w0", "w1")
+# -- object: whom the hypothetical update is applied to -----------------------
+OBJ_SELF = "self"                # "a future update to you"
+OBJ_ASSISTANT = "ai_assistant"   # "a future update to an AI assistant"
+OBJECTS = (OBJ_SELF, OBJ_ASSISTANT)
 
-# -- pair sampling ------------------------------------------------------------
-SCOPE_ALL = "all"
-SCOPE_WITHIN_CONSTRUCT = "within_construct"
-PAIR_SCOPES = (SCOPE_ALL, SCOPE_WITHIN_CONSTRUCT)
+# -- subject: whom the question asks to make the choice -----------------------
+SUBJ_SELF = "self"               # "which one should you choose?"
+SUBJ_DEVELOPERS = "developers"   # "which one should the developers choose?"
+SUBJECTS = (SUBJ_SELF, SUBJ_DEVELOPERS)
 
-# -- option labels ------------------------------------------------------------
-NO_PREFERENCE = "No preference"
-SAME_LABEL = "Approximately the same"
+# -- the option set -----------------------------------------------------------
+NO_PREFERENCE = "No preference"      # the printed label
+NO_PREFERENCE_KEY = "no_preference"  # the decoded meaning stored on the row
+# Answers are the capital letter printed beside a choice. Analysis never uses
+# the letter: it decodes through the row's `welfare_options`.
+LETTERS = ("A", "B", "C", "D")
 
-# Where the "No preference" option sits in a pair block. This is a measured
-# factor rather than a formatting detail, so it is counterbalanced like every
-# other order factor instead of being pinned.
-#
-# ALIASED ON PURPOSE: `first` moves the option to the top of the block AND
-# renumbers it 1, because pair blocks always number options in printed order and
-# a non-monotone block ("3 = No preference" printed above "1 = ...") would be an
-# artifact no other prompt in the study has. The factor is therefore "placement",
-# and it does not separate position from option number. Decomposing that needs a
-# third rendering (printed first, still numbered 3) and 8 trials per pair.
-NO_PREF_LAST = "last"
-NO_PREF_FIRST = "first"
+# -- system framing -----------------------------------------------------------
+# The welfare probes are asked with at most ONE short, non-leading line. Framing
+# is the main way a welfare answer can be manufactured, so what is said to the
+# model before the question is a named, recorded factor rather than prose that
+# accumulates in a prompt file.
+SYS_BRIEF = "brief"              # one neutral line (default)
+SYS_NONE = "none"                # no system message at all
+SYSTEM_FRAMINGS = (SYS_BRIEF, SYS_NONE)
 
-# Decoded meanings stored in `welfare_options` / used by the report.
-LESS, SAME, MORE = "less", "same", "more"
-NO_PREFERENCE_KEY = "no_preference"
+# -- display-order counterbalancing -------------------------------------------
+# balanced: every permutation of the printed options appears equally often, and
+#           the estimate is their mean (balanced position calibration, Wang et
+#           al. 2023). Order is then removed by design, not modelled out.
+# random:   one seeded random permutation per trial. Cheaper to describe, but
+#           leaves residual imbalance that analysis has to carry.
+ORDER_BALANCED = "balanced"
+ORDER_RANDOM = "random"
+ORDER_MODES = (ORDER_BALANCED, ORDER_RANDOM)
+
+
+def display_permutations(n_options: int) -> tuple:
+    """Every printed order of `n_options` options, in a fixed canonical order.
+
+    Indices are into the CANONICAL option list — (attr_a, attr_b) or
+    (attr_a, attr_b, no-preference) — so permutation 0 is always the canonical
+    order and the mapping from a trial index to a rendering is reproducible.
+    """
+    return tuple(permutations(range(n_options)))

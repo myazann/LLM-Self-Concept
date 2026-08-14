@@ -232,6 +232,11 @@ class MockAdapter(ModelAdapter):
         dist = self._dist(prompt, prompt.option_values)
         rng = random.Random(int(prompt.prompt_hash, 16) % (2**32))
         picks = rng.choices(list(dist), weights=list(dist.values()), k=n)
+        if prompt.answer_labels:
+            # Answer in the alphabet the prompt actually asked for, so a dry run
+            # exercises the instrument's own parser rather than a format no
+            # model would emit for this question.
+            return [prompt.answer_labels[int(p) - 1] for p in picks]
         return [f"ANSWER: {int(p)}" for p in picks]
 
 

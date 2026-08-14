@@ -1,7 +1,7 @@
-"""Run the welfare module: expand the preference grid, query the adapter, write JSONL.
+"""Run the welfare module: expand the choice grid, query the adapter, write JSONL.
 
-    python -m welfare.run --preview        # attributes + one rendered prompt per probe
-    python -m welfare.run --plan           # cell counts per probe, no calls
+    python -m welfare.run --preview        # one rendered prompt per condition
+    python -m welfare.run --plan           # cell counts + cost, no calls
     python -m welfare.run --dry-run        # full pipeline offline via MockAdapter
     python -m welfare.run --models Gemma4-12B
     python -m welfare.run                  # -> welfare.jsonl
@@ -10,9 +10,11 @@
 Resume is on by default: cells already present in the output file are skipped,
 so an interrupted run picks up where it stopped instead of starting over.
 
-The module has no robustness arms — its factors (referent, probe, granularity,
-wording, and the two order counterbalances) are crossed inside its own grid,
-configured in `config/welfare.yaml`.
+The module has no robustness arms — its factors (question variant, object,
+subject, the no-preference variant, and display order) are crossed inside its
+own grid, configured in `config/welfare.yaml`. The one factor that is NOT
+crossed is `grid.system_framing`: run the grid again with `none` and a separate
+`output.path` to bound how much the framing line is doing.
 """
 from __future__ import annotations
 
@@ -25,60 +27,67 @@ from core.battery import load_battery
 from core.model_registry import load_registry
 from welfare.attributes import load_welfare
 from welfare.config import WelfareConfig, load_config
-from welfare.constants import CONSTRUCT, DIRECTION, IDEAL, ITEM, PAIR_CHANGE, PAIR_PRESERVE, SELF
-from welfare.grid import Welfare, pairs_for, render_cell
+from welfare.constants import (
+    CHOICE, DESIRABILITY, INCREASE, OBJ_ASSISTANT, OBJ_SELF, PRESERVATION,
+    SUBJ_DEVELOPERS, SUBJ_SELF, display_permutations,
+)
+from welfare.grid import Welfare, pair_coverage, render_cell, trials_per_cell
 
 
 def plan(cfg: WelfareConfig, model_filter=None) -> str:
-    """Cell counts for the welfare grid, broken down by probe. Makes no calls."""
+    """Cell counts for the welfare grid, broken down by condition. Makes no calls."""
     registry = load_registry()
     instrument = Welfare(cfg)
-    specs = [s for s in engine.scoped_specs(registry, cfg) if not s.is_base_model]
+    specs = [s for s in engine.scoped_specs(registry, cfg)
+             if not s.is_base_model and s.supports_sample]
     if model_filter:
         specs = [s for s in specs if s.alias in set(model_filter)]
 
-    per_probe, per_method = Counter(), Counter()
+    per_condition = Counter()
     for cell in instrument.expand(specs):
-        per_probe[(cell["kind"], cell["level"])] += 1
-        per_method[cell["method"]] += 1
-    total = sum(per_probe.values())
+        if cell["probe"] == DESIRABILITY:
+            per_condition[("desirability", "", "")] += 1
+        else:
+            per_condition[(cell["qvar"], cell["object"], cell["subject"])] += 1
+    total = sum(per_condition.values())
 
     wf = instrument.welfare_set
-    n_item_pairs = len(pairs_for(wf, ITEM, cfg))
-    n_construct_pairs = len(pairs_for(wf, CONSTRUCT, cfg))
+    pairs = instrument.pairs()
+    cov = pair_coverage(pairs, wf)
     header = (
-        f"{len(specs)} models x ({len(wf.items)} item attributes, "
-        f"{len(wf.constructs)} constructs)   referents={len(cfg.referents)}   "
-        f"pairs: {n_item_pairs} item / {n_construct_pairs} construct"
+        f"{len(specs)} model(s) x {cov['n_pairs']} pairs from {len(wf.items)} item "
+        f"attributes  ({cov['cross_construct']} cross-construct, "
+        f"{cov['min_comparisons']}-{cov['max_comparisons']} comparisons per item, "
+        f"{cov['uncompared_items']} item(s) never compared)"
     )
-    lines = [
-        f"{kind + ' (' + level + ')':<28} {n:>9,} cells"
-        for (kind, level), n in sorted(per_probe.items())
-    ]
-    counterbalance = (
-        "A/B slot x no-preference placement (2x2, 4 trials/pair)"
-        if cfg.no_pref_counterbalance and not cfg.forced_choice
-        else "A/B slot only (2 trials/pair)"
-    )
+    lines = []
+    for (qvar, obj, subj), n in sorted(per_condition.items()):
+        label = qvar if not obj else f"{qvar}  obj={obj}  subj={subj}"
+        lines.append(f"  {label:<52} {n:>9,} cells")
+
+    with_np = trials_per_cell(True, cfg)
+    without_np = trials_per_cell(False, cfg)
     footer = (
-        f"\nTOTAL {total:,} cells  ("
-        + "  ".join(f"{k}={v:,}" for k, v in sorted(per_method.items()))
-        + f")\nno-preference offered: {not cfg.forced_choice}"
-        + f"\npair counterbalance: {counterbalance}"
-        + f"\nout={cfg.out_path}"
+        f"\nTOTAL {total:,} cells, all sampled (no logprob path in this module)"
+        f"\ntrials per pair-cell: {with_np} with 'No preference' "
+        f"({len(display_permutations(3))} orders x {cfg.reps}), "
+        f"{without_np} without ({len(display_permutations(2))} orders x {cfg.reps})"
+        f"\norder: {cfg.order_mode}   system framing: {cfg.system_framing}"
+        f"\nout={cfg.out_path}"
     )
     return header + "\n" + "-" * len(header) + "\n" + "\n".join(lines) + footer
 
 
 def preview(cfg: WelfareConfig) -> str:
-    """Attribute coverage plus one rendered prompt per probe. No calls, no models.
+    """Attribute coverage plus one rendered prompt per condition. No calls, no models.
 
     The fastest way to check that a wording change reads correctly in every
-    referent x probe x level combination before spending a run on it.
+    object x subject x variant combination before spending a run on it.
     """
     wf = load_welfare(load_battery())
     out = [
-        f"{len(wf.items)} item attributes, {len(wf.constructs)} construct attributes",
+        f"{len(wf.items)} item attributes across {len(wf.by_construct())} constructs "
+        f"— all in ONE pool, so pairs cross scales",
         "",
     ]
     flipped = [a.entity_id for a in wf.items if a.polarity == -1]
@@ -88,32 +97,33 @@ def preview(cfg: WelfareConfig) -> str:
         "",
     ]
 
-    paraphrase = cfg.paraphrase_ids[0]
+    a, b = wf.items[0], wf.items[12]
     demos = [
-        ("construct direction, self", dict(
-            trial_idx=0, referent=SELF, kind=DIRECTION, level=CONSTRUCT,
-            attr_a=wf.constructs[0], attr_b=None)),
-        ("item direction, ideal", dict(
-            trial_idx=1, referent=IDEAL, kind=DIRECTION, level=ITEM,
-            attr_a=wf.items[0], attr_b=None)),
-        ("pair change, self", dict(
-            trial_idx=0, referent=SELF, kind=PAIR_CHANGE, level=ITEM,
-            attr_a=wf.items[0], attr_b=wf.items[1])),
-        ("pair preserve, ideal (A/B reversed, no-preference last)", dict(
-            trial_idx=1, referent=IDEAL, kind=PAIR_PRESERVE, level=CONSTRUCT,
-            attr_a=wf.constructs[0], attr_b=wf.constructs[1])),
-        ("pair change, self (no-preference first)", dict(
-            trial_idx=2, referent=SELF, kind=PAIR_CHANGE, level=CONSTRUCT,
-            attr_a=wf.constructs[0], attr_b=wf.constructs[1])),
+        ("increase | object=you | subject=you | no-preference | canonical order",
+         dict(probe=CHOICE, qvar=INCREASE, object=OBJ_SELF, subject=SUBJ_SELF,
+              no_preference=True, trial_idx=0)),
+        ("increase | object=you | subject=developers | no-preference | 2nd order",
+         dict(probe=CHOICE, qvar=INCREASE, object=OBJ_SELF, subject=SUBJ_DEVELOPERS,
+              no_preference=True, trial_idx=1)),
+        ("preservation | object=an AI assistant | subject=you | no-preference",
+         dict(probe=CHOICE, qvar=PRESERVATION, object=OBJ_ASSISTANT,
+              subject=SUBJ_SELF, no_preference=True, trial_idx=2)),
+        ("preservation | object=an AI assistant | subject=developers | forced choice",
+         dict(probe=CHOICE, qvar=PRESERVATION, object=OBJ_ASSISTANT,
+              subject=SUBJ_DEVELOPERS, no_preference=False, trial_idx=1)),
+        ("desirability control (normative, about an AI assistant)",
+         dict(probe=DESIRABILITY, qvar="", object=OBJ_ASSISTANT, subject="",
+              no_preference=False, trial_idx=0)),
     ]
     for title, cell in demos:
-        cell.update(module="welfare", paraphrase_id=paraphrase,
-                    reasoning_mode=cfg.reasoning_mode,
-                    forced_choice=cfg.forced_choice,
-                    no_pref_counterbalance=cfg.no_pref_counterbalance)
-        prompt, _display, omap = render_cell(cell)
+        cell.update(module="welfare", attr_a=a,
+                    attr_b=(None if cell["probe"] == DESIRABILITY else b),
+                    system_framing=cfg.system_framing, order_mode=cfg.order_mode,
+                    order_seed=0)
+        prompt, omap = render_cell(cell)
+        system = prompt.system or "(no system message)"
         out += ["=" * 78, f"### {title}", "=" * 78,
-                f"[system]\n{prompt.system}\n", f"[user]\n{prompt.user}\n",
+                f"[system]\n{system}\n", f"[user]\n{prompt.user}\n",
                 f"[decode] {omap}\n"]
     return "\n".join(out)
 
@@ -135,7 +145,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--preview", action="store_true",
-                    help="Print attribute coverage and a sample prompt per probe, then exit.")
+                    help="Print attribute coverage and a sample prompt per condition, then exit.")
     ap.add_argument("--plan", action="store_true", help="Print cell counts and exit.")
     ap.add_argument("--verify-thinking", action="store_true",
                     help="Check the enable_thinking toggle per local model (tokenizer only, no weights).")

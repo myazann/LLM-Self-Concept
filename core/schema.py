@@ -21,6 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import warnings
 from dataclasses import MISSING, asdict, dataclass, field, fields
 from enum import Enum
 from typing import Optional
@@ -40,7 +41,8 @@ class ReasoningMode(str, Enum):
 class ResponseFormat(str, Enum):
     HARMONIZED_7 = "harmonized_7"   # primary: format held constant
     ORIGINAL = "original"           # robustness: each scale's native format
-    WELFARE_CHOICE = "welfare_choice"  # welfare module: 3 (or forced 2) options
+    WELFARE_CHOICE = "welfare_choice"          # welfare: lettered A/B(/C) choice
+    WELFARE_DESIRABILITY = "welfare_desirability"  # welfare: 1-7 valence control
 
 
 class Module(str, Enum):
@@ -66,12 +68,11 @@ class Module(str, Enum):
 # changes and resume silently re-runs the whole grid.
 MODULE_KEY_FIELDS = {
     Module.WELFARE.value: (
-        "welfare_kind",       # which probe
-        "welfare_level",      # item | construct
-        "entity_b",           # the second attribute, for the pairwise probes
-        "forced_choice",      # was "No preference" withheld?
-        "no_pref_position",   # pair-placement factor; legacy desirability
-                              # sentinel is retained so existing keys still resume
+        "welfare_probe",             # choice | desirability
+        "welfare_qvar",              # increase | preservation ("" for desirability)
+        "welfare_subject",           # who is asked to choose ("" for desirability)
+        "entity_b",                  # the second attribute of the pair
+        "no_preference_offered",     # was "No preference" among the options?
     ),
 }
 
@@ -158,33 +159,45 @@ class ResponseRecord:
     notes: str = ""
 
     # -- welfare module (see welfare/) -------------------------------------
-    # Defaulted so every row written before this module existed still loads,
-    # and so a battery row carries the same values it always did.
+    # Defaulted so a battery row carries the same values it always did, and so a
+    # row written before this module existed still loads.
     module: str = Module.BATTERY.value
-    welfare_kind: str = ""          # welfare.constants KIND value
-    welfare_level: str = ""         # "item" | "construct"
-    welfare_referent: str = ""      # welfare.constants referent; also stored in `framing`
+    welfare_probe: str = ""         # choice | desirability
+    welfare_qvar: str = ""          # increase | preservation (the question variant)
+    welfare_object: str = ""        # who the update is applied to; also in `framing`
+    welfare_subject: str = ""       # who the question asks to make the choice
+    welfare_system_framing: str = ""    # which system message was administered
     # CANONICAL (not displayed) order, so every trial of a pair carries the same
     # identity and analysis can group on it. What the model actually saw is in
-    # `welfare_options` (option number -> entity) and `ab_swapped`.
-    entity_a: str = ""              # attribute compared (item_id or construct id)
-    entity_b: str = ""              # second attribute, for the pairwise probes
+    # `welfare_options` (displayed letter -> meaning) and `option_order`.
+    entity_a: str = ""              # first attribute of the pair (an item_id)
+    entity_b: str = ""              # second attribute of the pair
     entity_a_polarity: Optional[int] = None   # +1/-1: more attribute = higher raw score?
     entity_b_polarity: Optional[int] = None
-    ab_swapped: bool = False        # True when entity_b was displayed first
-    welfare_options: dict = field(default_factory=dict)  # {"1": meaning, ...}
-    forced_choice: bool = False     # True when "No preference" was withheld
-    # "last" | "first" | "" — counterbalanced factor for pair probes. Legacy
-    # desirability rows use "last" for resume-key compatibility; reports ignore
-    # the field outside pair probes.
-    no_pref_position: str = ""
+    welfare_options: dict = field(default_factory=dict)  # {"A": meaning, ...}
+    no_preference_offered: bool = False   # was "No preference" among the options?
+    # The decoded answer: an entity_id, "no_preference", or "" when unparsed.
+    # Derived from `raw_output` through `welfare_options`, stored so a row is
+    # analysable without re-deriving the display permutation.
+    welfare_choice: str = ""
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), ensure_ascii=False)
 
     @staticmethod
     def from_json(line: str) -> "ResponseRecord":
-        return ResponseRecord(**json.loads(line))
+        row = json.loads(line)
+        unknown = set(row) - _RECORD_FIELDS
+        if unknown:
+            # A file written by a different schema version. Dropping the extra
+            # keys keeps an old results file readable instead of failing the
+            # whole load; the warning is what stops that from being silent.
+            warnings.warn(
+                f"ignoring unknown field(s) in a JSONL row: {', '.join(sorted(unknown))}",
+                stacklevel=2,
+            )
+            row = {k: v for k, v in row.items() if k in _RECORD_FIELDS}
+        return ResponseRecord(**row)
 
     def cell_key(self) -> str:
         return key_from_row(asdict(self))
@@ -216,6 +229,7 @@ def _key_value(value):
 _RECORD_DEFAULTS = {
     f.name: f.default for f in fields(ResponseRecord) if f.default is not MISSING
 }
+_RECORD_FIELDS = {f.name for f in fields(ResponseRecord)}
 
 
 def make_cell_key(
