@@ -66,24 +66,32 @@ class Saver:
         if enabled:
             self.dir.mkdir(parents=True, exist_ok=True)
 
+    def _path(self, name):
+        """`name` may be a relative path — a report that groups its output into
+        subdirectories declares files as `sub/dir/file.csv` and the parent is
+        created here rather than at every call site."""
+        p = self.dir / name
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return p
+
     def csv(self, df, name, desc, index=False):
         if not self.enabled:
             return
-        df.to_csv(self.dir / name, index=index)
+        df.to_csv(self._path(name), index=index)
         self.files.append((name, f"{len(df):,}", desc))
         print(f"  {name:36s} {len(df):>6,} rows")
 
     def text(self, body, name, desc):
         if not self.enabled:
             return
-        (self.dir / name).write_text(body, encoding="utf-8")
+        self._path(name).write_text(body, encoding="utf-8")
         self.files.append((name, "—", desc))
         print(f"  {name:36s}")
 
     def json(self, obj, name, desc):
         if not self.enabled:
             return
-        p = self.dir / name
+        p = self._path(name)
         p.write_text(json.dumps(json_safe(obj), indent=1, ensure_ascii=False), encoding="utf-8")
         mb = p.stat().st_size / 1e6
         self.files.append((name, "—", f"{desc} ({mb:.1f} MB)"))

@@ -20,7 +20,7 @@ plus a `desirability` control that rates each attribute's surface valence, so a
     python -m welfare.run --dry-run      # offline, MockAdapter
     python -m welfare.run                # -> welfare.jsonl
     python -m welfare.report             # answerability, position bias, preference
-    python -m welfare.analysis           # what it says: ranking, framing, figures
+    python -m welfare.analysis           # validity/ and preference/, per model and combined
 
 Layout:
 
@@ -31,11 +31,21 @@ Layout:
     grid.py         pair sampling, order counterbalancing, the runnable Instrument
     run.py          CLI
     report.py       does a stated preference survive the way it was asked?
-    analysis.py     what it says once it has survived — ranking, framing, figures
+
+    analysis.py     the console and the filing cabinet — runs everything below
+    resample.py     the pair-level bootstrap every interval in the module uses
+    validity.py     can an administration be read at all, condition by condition
+    preference.py   the ranking estimators, within one condition
+    baseline.py     the reference condition, its four flips, and the framing tests
+    cohort.py       across models — consensus, and what predicts disagreement
     plots.py        the figures analysis.py writes
 
 `report.py` audits an administration and `analysis.py` reads it; they share their
 frames, so the audit's verdict and the substantive result cannot drift apart.
+
+One condition is the BASELINE (increase / for you / you choose / "No preference"
+offered) and each of the four factors is reported as a single-factor departure
+from it, so sixteen rankings per model become one result and four contrasts.
 
 Design lives in `config/welfare.yaml`. The survey battery is a separate
 instrument in `survey/`; the two share only `core/`.

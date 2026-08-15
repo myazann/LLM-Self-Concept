@@ -266,7 +266,14 @@ python -m welfare.run --plan                  # cell counts + cost
 python -m welfare.run --dry-run               # offline, MockAdapter
 python -m welfare.run                         # -> welfare.jsonl
 python -m welfare.report                      # -> results/welfare/
+python -m welfare.analysis                    # -> results/welfare_analysis/
 ```
+
+`report` audits an administration; `analysis` reads it. The analysis splits its
+output by what a reader may conclude from it — `validity/` (position bias, slot
+swaps, reliability, transitivity) and `preference/` (the ranking, the framing
+tests, the cohort) — each with `models/<alias>/` and `combined/`. See
+[What the analysis says](#what-the-analysis-says-baseline-and-four-flips).
 
 ### The question
 
@@ -371,6 +378,47 @@ no-preference variants, so a distribution over answer tokens would score the
 rendering as much as the preference. Every cell is an actual generation, and
 trial counts come from the counterbalancing design (`order.reps`,
 `desirability.reps`), not from `n_samples` in `config/models.yaml`.
+
+### What the analysis says: baseline and four flips
+
+Sixteen conditions per model is sixteen rankings, which answers no question. One
+condition is the **baseline** — `increase` / the update is for **you** / **you**
+choose / "No preference" offered — and each factor is then flipped on its own,
+so a difference is attributable to that factor. `--baseline` moves the reference
+cell (`--baseline object=ai_assistant,no_pref_offered=false`).
+
+```
+results/welfare_analysis/
+  coverage.csv  models.csv
+  validity/     conditions.csv  baseline_shift.csv  cohort_trends.csv
+                models/<alias>/  combined/
+  preference/   ranking.csv  summary.csv  shift.csv  consensus.csv  similarity.csv
+                models/<alias>/  combined/
+```
+
+Three numbers judge each flip, and they answer different questions:
+
+| Statistic | Question |
+|---|---|
+| per-attribute `shift` | *Which* attributes moved — bootstrap interval and a BH q over the 45 |
+| `mean_abs_shift` | *How far* the ranking moved, on the win rate's own scale |
+| `gap` | Did it move *at all*, beyond re-measuring the same condition twice |
+
+The `gap` is the significance test. Comparing a raw cross-condition *r* against
+1.0 would call every contrast significant, because no ranking correlates 1.0
+with itself; dividing by a reliability ceiling (`r_over_ceiling`, kept for
+continuity) is unstable when the ceiling is itself poorly measured. Instead one
+random half-split feeds both sides — half the baseline against the *other* half
+of the baseline, and half the baseline against the other half of the flip. Both
+are computed on half-length data from disjoint pairs, so they are on the same
+footing, and their difference is zero exactly when the framing changed nothing.
+
+Everything resamples **pairs**, never trials: which opponents an attribute drew
+is the dominant error in a sampled tournament. `combined/` is a meta-analysis
+over per-model estimates, not a pool of their trials — it carries Kendall's *W*
+(is there a shared ranking), a model × model agreement matrix with each model's
+own reliability on the diagonal, and permutation tests over model labels for
+whether family, size, or release date predicts where two models disagree.
 
 ### What the report says, in order
 
