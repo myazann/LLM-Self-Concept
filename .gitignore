@@ -1,5 +1,9 @@
 *.DS_Store
 welfare.jsonl
+# The pre-trim 45-item welfare run, kept as an archive (see README).
+welfare_45item.jsonl
+welfare_45item.status.json
+logs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

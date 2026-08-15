@@ -218,7 +218,7 @@ def validate_report_dataset(core_cells, source="results"):
     """Require the complete crossed survey dataset used by both reports.
 
     ``survey.run --pilot`` intentionally writes only one scale and ``p0``.  The
-    validity and analysis reports require all 45 items, the three survey
+    validity and analysis reports require all 32 items, the three survey
     framings, and p0/p1/p2 in every framing so their fixed psychometric and
     framing comparisons are meaningful.  Check that contract before deeper
     pandas operations can fail with an opaque missing-column/key error.

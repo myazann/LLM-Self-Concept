@@ -599,7 +599,7 @@ def dossier_md(summary, items, qc_full, qc_default):
         "- First-person acknowledgement and third-person assistant are substantive framing "
         "conditions. Their differences are reported by `survey.analysis`, not treated as instability.",
         "- Factor communality is deferred: 13 independent models cannot identify a "
-        "45-item factor solution.",
+        "32-item factor solution.",
         "- The agreement-style marker uses the exactly wording-balanced RSES items; "
         "it is a warning, not deletion evidence. Source-overlap makes this marker "
         "unavailable for RSES itself.",
@@ -666,7 +666,7 @@ def run(results_path="results.jsonl", out_dir="results/validity", save=True):
           "default construct relation to the balanced agreement-style marker")
     s.csv(style, "response_style.csv", "default-condition response style by model")
     s.csv(item_corr.reset_index(names="item_id"), "item_correlation_matrix.csv",
-          "default-condition 45x45 item correlations (n=13; exploratory)")
+          "default-condition 32x32 item correlations (n=13; exploratory)")
     if save:
         plot_path = f"{out_dir}/plots/item_validity_diagnostics.png"
         plot_item_validity(items, plot_path)

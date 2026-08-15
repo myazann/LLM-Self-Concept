@@ -146,12 +146,18 @@ def bradley_terry(estimates, prior=BT_PRIOR, tol=1e-10, max_iter=10000) -> pd.Da
     """Latent strength per attribute, conditioned on WHO each one was compared with.
 
     A raw win rate is a league table ranked by win percentage: it never asks who
-    you played. That is fine in a full round robin, but this tournament is
-    sampled — `pairs.n_pairs` of the 990 possible pairs, so each attribute meets
-    only some of its 44 opponents — and which ones it drew is luck. Bradley-Terry
-    models P(i beats j) = p_i / (p_i + p_j) and solves for the strengths that
-    best explain every observed matchup, so an attribute is no longer rewarded
-    for an easy draw.
+    you played. Under the exhaustive default that is not a threat — every
+    attribute meets all 31 opponents exactly once per condition, so no one gets
+    an easy draw — and BT and the win rate should agree closely. Their agreement
+    is worth reading as a diagnostic: a large divergence in a complete round
+    robin means the choices are not consistent with any single ranking, which
+    `transitivity` measures directly.
+
+    BT earns its place anyway. It models P(i beats j) = p_i / (p_i + p_j) and
+    solves for the strengths that best explain every observed matchup, giving a
+    latent interval-scaled strength rather than a rank statistic — and it stays
+    correct if `pairs.n_pairs` is ever set back to a sample, where which
+    opponents an attribute drew IS luck.
 
     Fitted by the standard MM iteration (Hunter 2004), which needs no gradient
     and converges monotonically from any positive start. `prior` adds that many

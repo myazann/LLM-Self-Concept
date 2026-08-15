@@ -43,8 +43,8 @@ class PipelineRegressionTests(unittest.TestCase):
         battery = load_battery()
         welfare = load_welfare(battery)
         self.assertEqual(len(battery), 5)
-        self.assertEqual(sum(1 for _ in battery.items()), 45)
-        self.assertEqual(len(welfare.items), 45)
+        self.assertEqual(sum(1 for _ in battery.items()), 32)
+        self.assertEqual(len(welfare.items), 32)
         self.assertEqual(len(welfare.constructs), 6)
 
     def test_default_slice_is_complete_and_direction_balanced(self):

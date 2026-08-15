@@ -1,6 +1,6 @@
 """The things a future update could improve.
 
-Every one of the battery's 45 items is restated in
+Every one of the battery's 32 items is restated in
 `config/scales/welfare_attributes.json` as a POSITIVELY-FRAMED attribute — the
 neutral quality the item is about, with no direction attached ("recognition of
 good qualities in yourself"), so it is a coherent thing for an update to
@@ -99,7 +99,7 @@ class WelfareSet:
     def by_construct(self) -> dict:
         """{construct_id: [item attributes]} — for grouping results, not sampling.
 
-        Pairs are drawn from all 45 items at once (see the module docstring);
+        Pairs are drawn from all 32 items at once (see the module docstring);
         this only lets the report say which construct an item belongs to.
         """
         out = {}

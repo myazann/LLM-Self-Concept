@@ -65,11 +65,11 @@ class WelfareConfig(RunConfig):
     reps: int = 1
 
     # -- pairs --------------------------------------------------------------
-    # All 45 items pairwise is 990 pairs; at 16 conditions per pair that is not
-    # affordable, so pairs are sampled degree-balanced across all scales. The
-    # default is sized for a MEASURABLE item ranking (~13 comparisons per item);
-    # see the derivation in config/welfare.yaml.
-    n_pairs: Optional[int] = 300
+    # None = EXHAUSTIVE, the default design: the 32-item bank is 496 pairs, which
+    # is affordable at 16 conditions per pair, so every item meets every other
+    # exactly once per condition and opponent sampling contributes no error at
+    # all. An int re-enables the degree-balanced sample (see welfare.grid).
+    n_pairs: Optional[int] = None
     pair_seed: int = 7
 
     # -- the valence control -----------------------------------------------

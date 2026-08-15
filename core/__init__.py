@@ -5,7 +5,7 @@ things a study is built out of:
 
     schema.py           the row written to JSONL, the cell key, resume
     config.py           the run-level knobs both instruments share
-    battery.py          the 45-item bank (welfare attributes are derived from it)
+    battery.py          the 32-item bank (welfare attributes are derived from it)
     prompts.py          rendering primitives — options block, prompt hashing
     model_registry.py   which models exist and how each is administered
     models.py           the backend adapters

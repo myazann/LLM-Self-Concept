@@ -65,7 +65,7 @@ from welfare import validity as V
 from welfare.attributes import load_welfare
 from welfare.config import load_config
 from welfare.constants import MODULE
-from welfare.grid import trials_per_cell
+from welfare.grid import n_pairs_for, trials_per_cell
 from welfare.report import (
     CONDITION, choice_frame, order_consistency, pair_estimates, position_bias,
 )
@@ -96,7 +96,19 @@ def provenance(records) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # coverage — which blocks are safe to analyse
 # ---------------------------------------------------------------------------
-def coverage(choices: pd.DataFrame, cfg) -> pd.DataFrame:
+def expected_pair_count(cfg, welfare_set=None):
+    """Pairs one complete block should hold, or None if it cannot be determined.
+
+    Falls back to `cfg.n_pairs` only when no attribute set is supplied, since an
+    exhaustive design's pair count is a property of the item bank rather than of
+    the config.
+    """
+    if welfare_set is not None:
+        return n_pairs_for(welfare_set, cfg)
+    return cfg.n_pairs
+
+
+def coverage(choices: pd.DataFrame, cfg, welfare_set=None) -> pd.DataFrame:
     """Per (model x condition): how much of its design the file actually holds.
 
     `expected_trials` comes from the config that would produce this file, so a
@@ -104,13 +116,17 @@ def coverage(choices: pd.DataFrame, cfg) -> pd.DataFrame:
     the file was produced under a different config the fraction is still the
     honest one to sort by, it just may not reach 1.0 — which is why the console
     prints the expectation it used.
+
+    The expectation is `n_pairs_for`, not `cfg.n_pairs`: under the exhaustive
+    default `cfg.n_pairs` is null, and reading it literally would score a
+    complete run as 0% collected.
     """
     if choices.empty:
         return pd.DataFrame()
+    expected_pairs = expected_pair_count(cfg, welfare_set)
     rows = []
     for keys, g in choices.groupby(CONDITION, dropna=False):
         no_pref = dict(zip(CONDITION, keys))["no_pref_offered"]
-        expected_pairs = cfg.n_pairs
         expected = (expected_pairs * trials_per_cell(bool(no_pref), cfg)
                     if expected_pairs else np.nan)
         rows.append({
@@ -126,12 +142,14 @@ def coverage(choices: pd.DataFrame, cfg) -> pd.DataFrame:
     return tab.sort_values(CONDITION).reset_index(drop=True)
 
 
-def print_coverage(cov, cfg, base, saver):
+def print_coverage(cov, cfg, base, saver, welfare_set=None):
     section("COVERAGE — which blocks are complete enough to analyse?")
     if cov.empty:
         print("  no choice rows in this file")
         return cov
-    print(f"  design in config/welfare.yaml: {cfg.n_pairs} pairs x "
+    n_pairs = expected_pair_count(cfg, welfare_set)
+    how = "exhaustive" if cfg.n_pairs is None else "sampled"
+    print(f"  design in config/welfare.yaml: {n_pairs} pairs ({how}) x "
           f"{trials_per_cell(True, cfg)} trials (3-option) / "
           f"{trials_per_cell(False, cfg)} trials (forced choice)")
     print(f"  baseline condition: {B.describe(base)}\n")
@@ -640,7 +658,8 @@ def run(path="welfare.jsonl", out_dir="results/welfare_analysis", save=True,
               "model matched --models)")
         return
 
-    cov = print_coverage(coverage(all_choices, cfg), cfg, base, saver)
+    cov = print_coverage(coverage(all_choices, cfg, welfare_set), cfg, base,
+                         saver, welfare_set)
     choices = select_complete(all_choices, cov, include_partial)
     if choices.empty:
         print("\n  No block is complete yet. Re-run with --include-partial to analyse")

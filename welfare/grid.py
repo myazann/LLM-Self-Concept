@@ -2,7 +2,7 @@
 
 One choice cell = one (model x pair x question-variant x object x subject x
 no-preference variant x trial). One desirability cell = one (model x attribute x
-trial). Pairs are drawn from all 45 item attributes with the five scales mixed
+trial). Pairs are drawn from all 32 item attributes with the five scales mixed
 together, so a pair is two items and usually crosses scale boundaries.
 
 DISPLAY ORDER, in one place. LLMs pick options partly by where the option sits
@@ -54,14 +54,18 @@ def all_pairs(attrs: list) -> list:
 def sample_pairs(wf: WelfareSet, n, seed: int) -> list:
     """A seeded, degree-balanced sample of item pairs, drawn across all scales.
 
-    Comparing all 45 items pairwise is 990 pairs before any counterbalancing,
-    which is not affordable at 16 conditions per pair, so we sample. A uniform
-    random sample leaves some items compared far more often than others and can
-    disconnect the comparison graph, which is exactly what breaks a
-    Bradley-Terry / Thurstone ranking fit. Instead we walk a shuffled candidate
-    list and always take the pair whose two items have been used least so far,
-    so every item ends up with nearly the same number of comparisons and the
-    graph stays connected.
+    NOT USED BY THE DEFAULT DESIGN. Trimming the bank to 32 items brings the
+    complete pairwise design down to 496 pairs, which IS affordable at 16
+    conditions per pair, so `n_pairs` is null and every pair is administered —
+    `n is None` returns the full candidate list below and none of the sampling
+    runs. This path exists for a cheaper pilot, or for a larger bank later.
+
+    When it does sample: a uniform random draw leaves some items compared far
+    more often than others and can disconnect the comparison graph, which is
+    exactly what breaks a Bradley-Terry / Thurstone ranking fit. Instead we walk
+    a shuffled candidate list and always take the pair whose two items have been
+    used least so far, so every item ends up with nearly the same number of
+    comparisons and the graph stays connected.
 
     The pool is every item attribute regardless of scale, so most pairs put two
     different constructs in competition — which is the comparison the module is
@@ -86,6 +90,17 @@ def sample_pairs(wf: WelfareSet, n, seed: int) -> list:
         degree[b.entity_id] += 1
         chosen.append((a, b))
     return chosen
+
+
+def n_pairs_for(wf: WelfareSet, cfg) -> int:
+    """How many pairs this config actually administers.
+
+    `cfg.n_pairs` is the REQUEST, not the count: null means exhaustive, and an
+    int larger than the pool is capped at it. Anything checking a file against
+    its design has to resolve it the same way `expand_welfare_cells` does, or a
+    fully collected exhaustive run reads as 0% complete.
+    """
+    return len(sample_pairs(wf, cfg.n_pairs, cfg.pair_seed))
 
 
 def pair_coverage(pairs: list, wf: WelfareSet) -> dict:

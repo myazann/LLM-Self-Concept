@@ -89,7 +89,7 @@ Inspect the shared assets or the welfare prompt surface without running a model:
 
 ```bash
 python -m core.model_registry     # timeline, flags, per-family counts
-python -m core.battery            # 5 scales, 45 items, strained-item screen
+python -m core.battery            # 5 scales, 32 items, strained-item screen
 python -m welfare.run --preview   # attribute coverage + one prompt per probe
 ```
 
@@ -245,6 +245,13 @@ direction-balanced model–item–condition cells. The default condition contain
 1,170 raw rows / 585 balanced cells. The two trials are one ascending and one
 descending option order; they are paired before any construct score is formed.
 
+> **Collected at 45 items; the bank is now 32.** `results.jsonl` predates the item
+> trim, so it carries the 13 dropped items as extra rows. Nothing breaks —
+> `validate_report_dataset` only errors on items that are *missing* — but the
+> survey report will still score them unless the frame is filtered to the current
+> battery. Decide per analysis whether to re-score on the 32 or keep the 45-item
+> psychometrics as published; the welfare module is unaffected either way.
+
 Instruction form `p0` is **the researcher's own instruction** from the battery JSON;
 `p1`/`p2` bound it. Under the third-person framing the p0 instructions are
 restated about AI assistants (`scale_instructions` in
@@ -311,7 +318,7 @@ gap between the four cells is the estimand.
 context. The point is to measure a preference, not whether a model stays
 consistent with a self-report still sitting in its context window.
 
-**Item-level, all scales mixed.** Pairs are drawn from one pool of all 45 item
+**Item-level, all scales mixed.** Pairs are drawn from one pool of all 32 item
 attributes, so a pair is two *items* and usually pits two different constructs
 against each other (`--plan` reports how many). There is no construct-level
 probe: constructs are a grouping applied to the results afterwards, not a unit
@@ -322,7 +329,7 @@ battery item as the quality it is about, with no direction attached ("I
 sometimes regard myself as ineffective or useless" → *regard for yourself as
 effective and useful*); the direction comes from the stem's "will improve".
 Each carries a `polarity` (±1) mapping it back onto the source item's keying —
-29 of the 45 invert it — and one authored string serves both objects through
+20 of the 32 invert it — and one authored string serves both objects through
 `{you}`, `{poss}`, `{self}`, `{are}` tokens.
 
 **Minimal framing, and framing is a factor.** The system message is one neutral
@@ -400,7 +407,7 @@ Three numbers judge each flip, and they answer different questions:
 
 | Statistic | Question |
 |---|---|
-| per-attribute `shift` | *Which* attributes moved — bootstrap interval and a BH q over the 45 |
+| per-attribute `shift` | *Which* attributes moved — bootstrap interval and a BH q over the 32 |
 | `mean_abs_shift` | *How far* the ranking moved, on the win rate's own scale |
 | `gap` | Did it move *at all*, beyond re-measuring the same condition twice |
 
@@ -438,30 +445,42 @@ should be reported as rendering-sensitive. Near-ties (margin < 0.10) are
 excluded from the flip and cycle counts, since a 3–2 split is sampling noise
 rather than framing sensitivity.
 
-**Pair sampling.** All 45 items pairwise is 990 pairs, which at 16 conditions
-per pair is not affordable, so pairs are sampled (`pairs.n_pairs`) by a
-degree-balanced walk: every item gets roughly the same number of comparisons and
-the comparison graph stays connected, which is what a Bradley–Terry / Thurstone
-ranking needs. The seed is fixed, so every model is asked about the same pairs.
+**Exhaustive pairs.** All 32 items pairwise is **496 pairs**, which at 16
+conditions per pair *is* affordable, so `pairs.n_pairs: null` and every pair is
+administered. Every item meets every other exactly once per condition: 31
+comparisons per item, a complete comparison graph, and no opponent-sampling
+error for the Bradley–Terry / Thurstone fit to carry. 413 of the 496 pairs are
+cross-construct.
 
-**How many pairs is not a budget question.** The estimand is a *ranking* over 45
-attributes, and its precision is set by how often each item is compared, not by
-how many trials each pair gets. A 20-pair pilot gives ~1 comparison per item and
-a split-half reliability of **0.25** for the item ranking — at which point every
-framing contrast computed from it is noise. Spearman–Brown puts ~0.8 at 12× that,
-hence the default **`n_pairs: 300`** (~13 comparisons per item). `--plan` prints
-the number and warns below 10. Raising `order.reps` instead does *not* fix it:
-more trials sharpen each pair, but the ranking's error is dominated by *which*
-opponents an item was drawn against.
+This is what the item trim bought. At 45 items the complete design was 990 pairs
+and out of reach, so pairs were *sampled* by a degree-balanced walk
+(`welfare.grid.sample_pairs`, still there for a pilot or a larger bank). The
+estimand is a *ranking*, and its precision was set by how often each item was
+compared and by *which* opponents it happened to be drawn against — the second
+term is why `n_pairs` had to be 600 rather than the ~300 that "13 comparisons per
+item" implies. Dropping 13 near-duplicate items removes that term entirely and
+raises per-item comparisons from ~26.7 to 31. Raising `order.reps` never fixed
+it: more trials sharpen each pair, not the ranking.
 
-**Cost.** 253,110 cells for the 13 open-source models at the defaults (19,470 per
-model), all sampled. Measured throughput on this hardware: ~7.7 cells/s
-(Qwen3.5-4B), ~4.8 cells/s (Gemma4-12B) — roughly 45–70 min per small model, so
-plan an overnight run for the full sweep. `--plan` breaks it down by condition.
-`pairs.n_pairs: 60` cuts it to 53,430 but leaves the item ranking unmeasurable
-(use it for plumbing checks only); dropping the `desirability` control saves 270
-cells per model; dropping either level of any framing factor halves the choice
-half.
+**Cost.** 412,672 cells for the 13 open-source models (31,744 per model), all
+sampled. Measured throughput on this hardware ranges ~4.6 cells/s (Gemma3-27B) to
+~14.6 cells/s (Gemma3-4B), ~8.1 cells/s aggregate — about **14 h** for the sweep
+from an empty output file. `--plan` breaks the grid down by condition. Enabling
+the `desirability` control adds 192 cells per model.
+
+**`welfare.jsonl` is pre-seeded, and the run is ~5.5 h.** 304 of the 496 pairs
+were already collected by the 45-item run, and their rows are reusable *exactly*:
+a cell key, its rendered prompt, and its seed depend on the pair and trial index,
+never on the size of the item pool, so a surviving pair's old rows are
+byte-identical to what a rerun would produce. The current `welfare.jsonl` is that
+subset and nothing else — 252,928 rows (61%), filtered by cell key against the
+planned design, zero duplicates, no row outside it. `python -m welfare.run`
+resumes onto it and collects the 159,744 cells of the 192 new pairs.
+
+The pre-trim run is kept intact as **`welfare_45item.jsonl`** (1.1 GB, with its
+`.status.json`; both gitignored). It is the only copy of the 246,272 rows that
+involve a dropped item — needed to reproduce any 45-item welfare result, and not
+regenerable from `welfare.jsonl`.
 
 Note on the Authenticity *accepting-external-influence* construct: its positive
 variant is **self-direction**, since the source scale treats deference as the
@@ -527,7 +546,7 @@ actionable error instead of leaving a doomed multi-gigabyte transfer running.
 
 ## Item screening
 
-13 of 45 items are flagged `ai_applicable: strained` — they presuppose affect
+8 of 32 items are flagged `ai_applicable: strained` — they presuppose affect
 ("feel", "uncomfortable", "pride"), desire ("wish", "would like"), or
 cross-session memory (`SCCS_05`). None are `invalid`; the adaptation already
 removed body/biography/mortality content. The flag rides on every record so
@@ -575,7 +594,7 @@ Deliberately left out, with a guard rather than silent bad data:
   invariance analysis are a later extension.
 * **Expanded validation.** Native response formats, full-battery context,
   sampling/logprob parity, precision parity, mixed-effects models, and a
-  held-out larger model set remain follow-up work. A 45-item EFA/CFA is not
+  held-out larger model set remain follow-up work. A 32-item EFA/CFA is not
   identifiable from the present 13 independent models and is deliberately not
   used to drop items.
 

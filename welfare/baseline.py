@@ -23,7 +23,7 @@ so the contrast is paired and the resampling follows the pairs
 questions:
 
   * per attribute   delta = win(flip) - win(baseline), with a bootstrap
-                    interval and a BH q-value over the 45 attributes. Which
+                    interval and a BH q-value over the 32 attributes. Which
                     attributes moved.
   * mean |delta|    how far the ranking moved on average. An effect SIZE, on the
                     win rate's own scale.

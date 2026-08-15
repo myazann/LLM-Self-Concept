@@ -25,7 +25,7 @@
 #   python -m welfare.run             # -> welfare.jsonl
 #   python -m welfare.report          # -> results/welfare/
 #
-# The attributes — a neutral, positively-framed restatement of all 45 battery
+# The attributes — a neutral, positively-framed restatement of all 32 battery
 # items — live in config/scales/welfare_attributes.json.
 # ---------------------------------------------------------------------------
 
@@ -99,24 +99,24 @@ order:
 
 # --- pairs -----------------------------------------------------------------
 # Items from ALL FIVE scales go into one pool, so a pair is two items and
-# usually pits two different constructs against each other. All 45 pairwise is
-# 990 pairs, which at 16 conditions per pair is not affordable, so pairs are
-# SAMPLED by a degree-balanced walk: every item gets roughly the same number of
-# comparisons and the comparison graph stays connected, which is what a
-# Bradley-Terry / Thurstone ranking needs.
+# usually pits two different constructs against each other.
 #
-# HOW MANY. The estimand is a RANKING over the 45 attributes, so what matters is
-# how many times each item is compared per condition (`--plan` prints it). A
-# 20-pair pilot gives ~1 comparison per item and a split-half reliability of
-# 0.25 for the item ranking — i.e. the ranking is not measured at all, and every
-# framing contrast computed from it is noise. Spearman-Brown says reaching ~0.8
-# needs ~12x that, so ~13 comparisons per item, so n_pairs ~ 13 * 45 / 2 ~ 300.
-# Raising `order.reps` instead does NOT fix this: more trials sharpen each pair,
-# but the ranking's error is dominated by WHICH opponents an item happened to be
-# compared against, and only more pairs fixes that.
+# EXHAUSTIVE. Trimming the battery from 45 to 32 items (13 near-duplicate items
+# dropped; see config/scales/welfare_attributes.json) takes the complete pairwise
+# design from 990 pairs to 496, which IS affordable at 64 trials per pair. So
+# every pair is now administered and `n_pairs` is null.
+#
+# This removes opponent sampling as a source of error entirely. Under the old
+# degree-balanced sample the ranking's precision was dominated by WHICH opponents
+# an item happened to be drawn against — the reason n_pairs had to be ~600 rather
+# than the ~300 that "13 comparisons per item" implies. With the full design every
+# item meets all 31 others exactly once per condition, so the comparison graph is
+# complete and the Bradley-Terry / Thurstone fit has no sampling-induced
+# imbalance left to model out. `pair_seed` is now inert (kept so an older run's
+# fingerprint still parses); set n_pairs back to an integer to re-enable sampling.
 pairs:
-  n_pairs: 600               # null = all 990 (exhaustive); --plan prints coverage
-  pair_seed: 7               # fixed, so every model sees the same pairs
+  n_pairs: null              # null = all 496 (exhaustive); --plan prints coverage
+  pair_seed: 7               # unused while n_pairs is null
 
 # --- the valence control ---------------------------------------------------
 # Every attribute is positively framed, so a "preference" could just be the

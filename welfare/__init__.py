@@ -4,7 +4,7 @@ A separate instrument from the survey battery, with its own grid, its own output
 file, and a `module` tag on every row, so nothing here can leak into the
 psychometrics.
 
-Every cell is one pairwise choice between two of the battery's 45 item
+Every cell is one pairwise choice between two of the battery's 32 item
 attributes, asked in a fresh context, crossed over four framing factors:
 
     question variant   what choosing costs — nothing, or the other attribute

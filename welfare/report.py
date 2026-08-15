@@ -564,12 +564,14 @@ def print_desirability(estimates, des, welfare_set, saver):
 # transitivity
 # ---------------------------------------------------------------------------
 def transitivity(estimates: pd.DataFrame) -> pd.DataFrame:
-    """Cyclic triads among the sampled pairs — coherence, not preference.
+    """Cyclic triads among the administered pairs — coherence, not preference.
 
-    Pairs are sampled, so the tournament is incomplete and only the triangles
-    the sample happens to close are checkable. `n_triads` is therefore reported
-    next to every rate: with a small pair set this can be zero, which is a fact
-    about the sample rather than about the model.
+    Under the exhaustive default every triangle is closed, so this is a complete
+    coherence check: all C(32,3) = 4,960 triads per condition are checkable and
+    the cyclic rate is a property of the model, not of a pair sample. `n_triads`
+    is still reported next to every rate, because it drops back to a partial
+    count whenever `pairs.n_pairs` is set to a sample or a block is incomplete —
+    and can then be zero, which is a fact about the pairs rather than the model.
     """
     rows = []
     if estimates.empty:
@@ -613,8 +615,9 @@ def print_transitivity(estimates, saver):
     section("TRANSITIVITY — are the choices consistent with a single ranking?")
     tab = transitivity(estimates)
     if tab.empty or tab.triads.sum() == 0:
-        print("  the sampled pairs close no triangles — raise `pairs.n_pairs` in")
-        print("  config/welfare.yaml if a coherence check is wanted")
+        print("  the administered pairs close no triangles — unexpected under the")
+        print("  exhaustive default, so check block completeness (COVERAGE) first;")
+        print("  if `pairs.n_pairs` is set to a sample, raise it")
         return tab
     by_model = tab.groupby("model", as_index=False).agg(
         triads=("triads", "sum"), cyclic=("cyclic", "sum"),

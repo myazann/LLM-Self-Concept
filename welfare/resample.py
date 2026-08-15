@@ -156,7 +156,7 @@ def boot_p(draws, null=0.0, axis=0):
 def fdr(pvals):
     """Benjamini-Hochberg q-values.
 
-    A framing contrast is tested once per attribute — 45 tests per factor — so
+    A framing contrast is tested once per attribute — 32 tests per factor — so
     an uncorrected 0.05 would hand back two "significant" attributes from noise
     alone. BH controls the false DISCOVERY rate, which is the right error to
     control when the output is a shortlist of attributes to look at rather than

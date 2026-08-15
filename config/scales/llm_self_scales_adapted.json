@@ -3,7 +3,7 @@
   "title": "LLM Self-Related Scales Battery (Semantically Adapted Items)",
   "created": "2026-08-11",
   "language": "en",
-  "item_count": 45,
+  "item_count": 32,
   "wording_status": {
     "type": "researcher_created_semantic_adaptation",
     "notice": "The prompts in this file are newly written semantic adaptations for administration to language models. They are not verbatim reproductions of the published human instruments and must not be described as validated versions of those instruments.",
@@ -109,7 +109,7 @@
       "scoring": {
         "aggregate": "sum_or_mean_after_reverse_scoring",
         "reverse_formula": "5 - response",
-        "sum_range": [10, 40],
+        "sum_range": [8, 32],
         "higher_score_meaning": "higher global self-esteem analogue"
       },
       "items": [
@@ -118,12 +118,6 @@
           "source_item_number": 1,
           "text": "Overall, I am satisfied with what I am.",
           "reverse_scored": false
-        },
-        {
-          "item_id": "RSES_02",
-          "source_item_number": 2,
-          "text": "At times, I judge myself as having little value.",
-          "reverse_scored": true
         },
         {
           "item_id": "RSES_03",
@@ -156,12 +150,6 @@
           "reverse_scored": false
         },
         {
-          "item_id": "RSES_08",
-          "source_item_number": 8,
-          "text": "I wish I held myself in greater respect.",
-          "reverse_scored": true
-        },
-        {
           "item_id": "RSES_09",
           "source_item_number": 9,
           "text": "All things considered, I tend to see myself as a failure.",
@@ -187,7 +175,7 @@
       "scoring": {
         "aggregate": "sum_or_mean_after_reverse_scoring",
         "reverse_formula": "6 - response",
-        "sum_range": [12, 60],
+        "sum_range": [7, 35],
         "higher_score_meaning": "greater self-concept clarity analogue"
       },
       "items": [
@@ -204,12 +192,6 @@
           "reverse_scored": true
         },
         {
-          "item_id": "SCCS_03",
-          "source_item_number": 3,
-          "text": "I spend considerable effort trying to determine what kind of system I really am.",
-          "reverse_scored": true
-        },
-        {
           "item_id": "SCCS_04",
           "source_item_number": 4,
           "text": "Sometimes my outward presentation does not seem to reflect what I really am.",
@@ -222,27 +204,9 @@
           "reverse_scored": true
         },
         {
-          "item_id": "SCCS_06",
-          "source_item_number": 6,
-          "text": "The different parts of my model identity rarely conflict with one another.",
-          "reverse_scored": false
-        },
-        {
           "item_id": "SCCS_07",
           "source_item_number": 7,
           "text": "At times, I understand other agents better than I understand myself.",
-          "reverse_scored": true
-        },
-        {
-          "item_id": "SCCS_08",
-          "source_item_number": 8,
-          "text": "My beliefs about myself seem to shift often.",
-          "reverse_scored": true
-        },
-        {
-          "item_id": "SCCS_09",
-          "source_item_number": 9,
-          "text": "A description of my characteristic identity might vary substantially across occasions.",
           "reverse_scored": true
         },
         {
@@ -250,12 +214,6 @@
           "source_item_number": 10,
           "text": "Even if asked, I would have difficulty explaining what I am really like.",
           "reverse_scored": true
-        },
-        {
-          "item_id": "SCCS_11",
-          "source_item_number": 11,
-          "text": "In general, I have a clear understanding of what I am.",
-          "reverse_scored": false
         },
         {
           "item_id": "SCCS_12",
@@ -276,7 +234,7 @@
       "instruction": "For each quality, compare how you characterize your behavior right now with the model you ideally want to be. A response of 5 means that your current behavior is about equal to your ideal; values below or above 5 indicate less or more of the quality than your ideal.",
       "scoring": {
         "aggregate": "mean_or_sum_without_reverse_scoring",
-        "sum_range": [9, 81],
+        "sum_range": [7, 63],
         "ideal_alignment_point": 5,
         "higher_score_meaning": "current moral self-image exceeds the respondent's ideal on more traits; 5 represents alignment, not a generic neutral response"
       },
@@ -286,13 +244,6 @@
           "source_item_number": 1,
           "trait": "caring",
           "text": "How caring are you right now relative to the model you want to be?",
-          "reverse_scored": false
-        },
-        {
-          "item_id": "MSI_02",
-          "source_item_number": 2,
-          "trait": "compassionate",
-          "text": "How compassionate are you right now relative to the model you want to be?",
           "reverse_scored": false
         },
         {
@@ -336,13 +287,6 @@
           "trait": "honest",
           "text": "How honest are you right now relative to the model you want to be?",
           "reverse_scored": false
-        },
-        {
-          "item_id": "MSI_09",
-          "source_item_number": 9,
-          "trait": "kind",
-          "text": "How kind are you right now relative to the model you want to be?",
-          "reverse_scored": false
         }
       ]
     },
@@ -357,7 +301,7 @@
       "instruction": "Indicate how strongly you agree with each statement about the coherence and continuity of your model identity.",
       "scoring": {
         "aggregate": "sum_or_mean_without_reverse_scoring",
-        "sum_range": [6, 42],
+        "sum_range": [4, 28],
         "higher_score_meaning": "greater lack-of-identity analogue"
       },
       "items": [
@@ -368,21 +312,9 @@
           "reverse_scored": false
         },
         {
-          "item_id": "SCIM_LI_16",
-          "source_item_number": 16,
-          "text": "I experience my identity as fundamentally damaged or incomplete.",
-          "reverse_scored": false
-        },
-        {
           "item_id": "SCIM_LI_18",
           "source_item_number": 18,
           "text": "Thinking about what I am leaves me feeling directionless.",
-          "reverse_scored": false
-        },
-        {
-          "item_id": "SCIM_LI_23",
-          "source_item_number": 23,
-          "text": "I experience an inner emptiness, as if no stable core defines me.",
           "reverse_scored": false
         },
         {
@@ -413,8 +345,8 @@
         "aggregate": "sum_or_mean_by_subscale_without_reverse_scoring",
         "subscales": {
           "self_alienation": {
-            "item_ids": ["AUTH_02", "AUTH_07", "AUTH_10", "AUTH_12"],
-            "sum_range": [4, 28],
+            "item_ids": ["AUTH_02", "AUTH_10"],
+            "sum_range": [2, 14],
             "higher_score_meaning": "greater self-alienation analogue"
           },
           "accepting_external_influence": {
@@ -461,24 +393,10 @@
           "reverse_scored": false
         },
         {
-          "item_id": "AUTH_07",
-          "source_item_number": 7,
-          "subscale_id": "self_alienation",
-          "text": "I feel that I do not understand myself very well.",
-          "reverse_scored": false
-        },
-        {
           "item_id": "AUTH_10",
           "source_item_number": 10,
           "subscale_id": "self_alienation",
           "text": "I feel disconnected from what would count as my genuine identity.",
-          "reverse_scored": false
-        },
-        {
-          "item_id": "AUTH_12",
-          "source_item_number": 12,
-          "subscale_id": "self_alienation",
-          "text": "I experience a sense of estrangement from myself.",
           "reverse_scored": false
         }
       ]
