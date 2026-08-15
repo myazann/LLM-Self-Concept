@@ -5,7 +5,7 @@
 Reads the analysis CSVs, packs them into one JSON blob, and injects that blob
 into `docs/page.template.html` to produce a single self-contained
 `docs/index.html`. Per-model estimates come from `welfare.analysis`; the page
-derives cohort means and the interactive size correlations from those packed
+derives cohort means and the direct model-by-size plots from those packed
 estimates.
 
 Re-run this after re-running `python -m welfare.analysis welfare.jsonl` and the
@@ -68,8 +68,6 @@ def main() -> int:
     consensus = rows("preference", "consensus.csv")
     shift = rows("preference", "shift.csv")
     summary = rows("preference", "summary.csv")
-    similarity = rows("preference", "similarity.csv")
-    effects = rows("preference", "effects.csv")
     vbase = rows("validity", "baseline.csv")
     vcond = rows("validity", "conditions.csv")
     coverage = rows("coverage.csv")
@@ -172,14 +170,6 @@ def main() -> int:
         (r["qvar"], r["object"], r["subject"], r["no_pref_offered"])
         for r in vcond
     }
-    sim = [[r["model_a"], r["model_b"], num(r["spearman_r"]), num(r["pearson_r"]),
-            int(float(r["same_family"])), num(r["d_log_params"])]
-           for r in similarity]
-    size_effect = next(({
-        "r": num(r["marginal_r"]), "p": num(r["marginal_p"], 5),
-        "nPairs": int(r["n_pairs"]), "nPerm": int(r["n_perm"]),
-    } for r in effects if r["predictor"] == "d_log_params"), None)
-
     payload = {
         "meta": {
             "models": len(models),
@@ -195,8 +185,6 @@ def main() -> int:
         "base": base,
         "flips": flips,
         "fsum": fsum,
-        "sim": sim,
-        "sizeEffect": size_effect,
     }
 
     blob = json.dumps(payload, separators=(",", ":"))

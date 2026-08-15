@@ -33,9 +33,8 @@ recalculated.
 Two things are computed in the page from the packed per-model estimates:
 
 * **cohort means and ranges**, averaged over the analyzed models;
-* **the size correlations**, as a Spearman rank correlation with
-  a seeded permutation test (2,000 draws) and a Benjamini-Hochberg correction
-  across the 32 qualities.
+* **the model-size panels**, which order qualities by their Spearman relationship
+  with total parameter count and plot every model's baseline score directly.
 
 ## Baseline
 
