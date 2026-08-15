@@ -85,6 +85,23 @@ but not instruction-stable; all other statuses still name their caveat. No item
 is removed automatically. `drop_candidate` means revise/test on held-out models,
 not “delete and rerun until alpha rises.”
 
+## The public results page
+
+`docs/` holds a single self-contained page summarising the welfare results for a
+general reader — the ranking with a model and framing filter, the framing tests,
+the decline rates, and the model-level comparisons. It is generated from
+`results/welfare_analysis/`, so it is refreshed by re-running the analysis and
+one command:
+
+```bash
+python -m welfare.analysis welfare.jsonl --out results/welfare_analysis
+python docs/build.py                     # -> docs/index.html
+```
+
+Serve it from GitHub Pages with *Deploy from a branch* / folder `/docs`, or open
+the file. Edit `docs/page.template.html`, never `docs/index.html`. See
+`docs/README.md`.
+
 Inspect the shared assets or the welfare prompt surface without running a model:
 
 ```bash

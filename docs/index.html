@@ -1,0 +1,1095 @@
+<title>What AI Prefers for Its Self</title>
+<meta name="description" content="A pairwise study of which self-related qualities open-weight AI models prefer a future update to improve.">
+
+<style>
+/* ── tokens ────────────────────────────────────────────────────────────── */
+:root{
+  color-scheme: light;
+  --plane:#f4f5f7;
+  --surface:#fbfbfc;
+  --surface-2:#eef0f3;
+  --ink:#10141a;
+  --ink-2:#4b545f;
+  --ink-3:#838d99;
+  --rule:#e2e5ea;
+  --rule-2:#c8ced7;
+
+  --s1:#2a78d6;          /* blue  — primary measure */
+  --accent-solid:#2a78d6;/* filled control background (white text sits on it) */
+  --accent-ink:#1c5cab;  /* accent used AS TEXT — a darker step, for contrast */
+  --s2:#eb6834;          /* orange */
+  --s3:#1baf7a;          /* aqua */
+  --s4:#eda100;          /* yellow */
+  --pos:#2a78d6;         /* diverging: toward */
+  --neg:#e34948;         /* diverging: away */
+  --warn:#d03b3b;
+
+  --wash:rgba(42,120,214,.10);
+  --wash-2:rgba(42,120,214,.055);
+  --ring:rgba(16,20,26,.10);
+
+  --sans:"Helvetica Neue",Helvetica,"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono","Segoe UI Mono","Roboto Mono",Menlo,Consolas,monospace;
+
+  --shell:1180px;
+  --prose:64ch;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --plane:#0a0c0f;
+    --surface:#14171b;
+    --surface-2:#1c2027;
+    --ink:#f3f5f7;
+    --ink-2:#b3bcc6;
+    --ink-3:#7c8792;
+    --rule:#232830;
+    --rule-2:#333b45;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+    --accent-solid:#256abf; --accent-ink:#86b6ef;
+    --pos:#3987e5; --neg:#e66767; --warn:#e66767;
+    --wash:rgba(57,135,229,.16);
+    --wash-2:rgba(57,135,229,.08);
+    --ring:rgba(255,255,255,.10);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --plane:#0a0c0f;
+  --surface:#14171b;
+  --surface-2:#1c2027;
+  --ink:#f3f5f7;
+  --ink-2:#b3bcc6;
+  --ink-3:#7c8792;
+  --rule:#232830;
+  --rule-2:#333b45;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+  --accent-solid:#256abf; --accent-ink:#86b6ef;
+  --pos:#3987e5; --neg:#e66767; --warn:#e66767;
+  --wash:rgba(57,135,229,.16);
+  --wash-2:rgba(57,135,229,.08);
+  --ring:rgba(255,255,255,.10);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--plane);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.025em;text-wrap:balance;line-height:1.12}
+p{margin:0}
+a{color:inherit}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--s1);outline-offset:2px;border-radius:3px}
+
+/* ── layout ────────────────────────────────────────────────────────────── */
+.shell{max-width:var(--shell);margin:0 auto;padding:0 28px}
+@media (max-width:560px){.shell{padding:0 18px}}
+.prose{max-width:var(--prose)}
+.stack{display:flex;flex-direction:column;min-width:0}
+.g8{gap:8px}.g12{gap:12px}.g16{gap:16px}.g20{gap:20px}.g28{gap:28px}.g40{gap:40px}
+
+.eyebrow{
+  font-family:var(--mono);font-size:11px;font-weight:500;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);
+}
+
+/* ── top bar ───────────────────────────────────────────────────────────── */
+.topbar{
+  position:sticky;top:0;z-index:60;
+  background:color-mix(in srgb, var(--plane) 88%, transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--rule);
+}
+.topbar .shell{display:flex;align-items:center;justify-content:space-between;height:52px;gap:24px}
+.brand{font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--ink-2);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.brand b{color:var(--ink);font-weight:600}
+.brand .tail{color:var(--ink-3)}
+@media (max-width:560px){.brand .tail{display:none}}
+.navlinks{display:flex;gap:20px;font-size:13px;color:var(--ink-2)}
+.navlinks a{text-decoration:none;padding:2px 0;border-bottom:1px solid transparent}
+.navlinks a:hover{color:var(--ink);border-bottom-color:var(--rule-2)}
+@media (max-width:900px){.navlinks{display:none}}
+
+/* ── masthead ──────────────────────────────────────────────────────────── */
+.masthead{padding:76px 0 44px;border-bottom:1px solid var(--rule)}
+.masthead h1{font-size:clamp(38px,6.4vw,68px);font-weight:800;letter-spacing:-.038em;max-width:15ch}
+.standfirst{font-size:20px;line-height:1.5;color:var(--ink-2);max-width:56ch;margin-top:22px}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;margin-top:44px;
+  background:var(--rule);border:1px solid var(--rule)}
+.tile{background:var(--surface);padding:16px 18px 18px}
+.tile .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.tile .v{font-size:29px;font-weight:700;letter-spacing:-.03em;margin-top:6px;line-height:1}
+.tile .n{font-size:12.5px;color:var(--ink-3);margin-top:6px;line-height:1.4}
+@media (max-width:760px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.parameter-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;
+  margin-top:34px;background:var(--rule);border:1px solid var(--rule)}
+.parameter{background:var(--surface);padding:17px 18px 18px;min-width:0}
+.parameter .name{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-3)}
+.parameter .choices{font-size:14px;font-weight:650;line-height:1.35;margin-top:8px}
+.parameter .definition{font-size:12.5px;line-height:1.4;color:var(--ink-3);margin-top:6px}
+@media (max-width:820px){.parameter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:500px){.parameter-grid{grid-template-columns:1fr}}
+
+/* ── sections ──────────────────────────────────────────────────────────── */
+section{padding:64px 0;border-bottom:1px solid var(--rule)}
+.sechead{display:flex;flex-direction:column;gap:14px;margin-bottom:34px}
+.sechead h2{font-size:clamp(26px,3.4vw,36px);font-weight:750;max-width:22ch}
+.sechead .lede{font-size:17.5px;color:var(--ink-2);max-width:var(--prose)}
+
+.card{background:var(--surface);border:1px solid var(--rule);min-width:0}
+.card-pad{padding:22px 24px}
+.cardhead{padding:18px 24px 16px;border-bottom:1px solid var(--rule);display:flex;
+  justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap}
+.cardhead h3{font-size:17px;font-weight:650;letter-spacing:-.012em}
+.cardhead .sub{font-size:13px;color:var(--ink-3);margin-top:4px;max-width:62ch;line-height:1.45}
+
+.note{font-size:13.5px;color:var(--ink-3);line-height:1.5;max-width:70ch}
+.callout{border-left:2px solid var(--s1);padding:2px 0 2px 20px;max-width:var(--prose)}
+.callout strong{font-weight:650}
+
+.pillrow{display:flex;flex-wrap:wrap;gap:8px}
+.pill{font-family:var(--mono);font-size:11px;letter-spacing:.04em;padding:4px 9px;
+  border:1px solid var(--rule-2);color:var(--ink-2);border-radius:2px}
+
+/* ── controls ──────────────────────────────────────────────────────────── */
+.filters{border:1px solid var(--rule);background:var(--surface);padding:18px 22px;
+  display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start}
+.fgroup{display:flex;flex-direction:column;gap:7px;min-width:0}
+.fgroup > .eyebrow{margin-bottom:1px}
+.seg{display:flex;border:1px solid var(--rule-2);border-radius:3px;overflow:hidden;flex-wrap:wrap}
+.seg button{padding:6px 12px;font-size:13px;color:var(--ink-2);border-right:1px solid var(--rule-2);
+  transition:background .12s,color .12s;white-space:nowrap}
+.seg button:last-child{border-right:0}
+.seg button:hover{background:var(--surface-2);color:var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--accent-solid);color:#fff}
+:root[data-theme="dark"] .seg button[aria-pressed="true"],
+.seg button[aria-pressed="true"]{color:#fff}
+select{
+  font:inherit;font-size:13.5px;padding:6px 10px;background:var(--surface);color:var(--ink);
+  border:1px solid var(--rule-2);border-radius:3px;max-width:260px;
+}
+.check{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink-2);cursor:pointer}
+.check input{accent-color:var(--s1);width:15px;height:15px}
+.framing-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;flex:1 1 520px;min-width:0}
+@media (max-width:900px){.framing-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.framing-grid{grid-template-columns:1fr}}
+.framing-grid .seg{display:grid;grid-template-columns:1fr}
+.framing-grid .seg button{width:100%;text-align:left;border-right:0;border-bottom:1px solid var(--rule-2)}
+.framing-grid .seg button:last-child{border-bottom:0}
+.compare-controls{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end}
+.compare-controls .fgroup{flex:1 1 240px}
+.compare-controls select{max-width:none;width:100%}
+.sig{display:inline-flex;flex-direction:column;align-items:flex-end;line-height:1.2}
+.sig b{font-family:var(--sans);font-size:12.5px}
+.sig small{font-size:10px;color:var(--ink-3);margin-top:3px}
+.sig.yes b{color:var(--accent-ink)}
+
+/* ── ranking chart ─────────────────────────────────────────────────────── */
+.rank{padding:20px 24px 6px;--cols:var(--cols-wide)}
+@media (max-width:760px){.rank{padding:14px 14px 4px;--cols:var(--cols-narrow)}
+  .rank-axis .ticks span:nth-child(2),.rank-axis .ticks span:nth-child(4){display:none}
+  .rank-row .lbl{font-size:12.5px;padding-right:10px}}
+.rank-axis{display:grid;grid-template-columns:var(--cols);align-items:center;
+  font-family:var(--mono);font-size:10.5px;color:var(--ink-3);letter-spacing:.04em}
+.rank-axis .ticks{position:relative;height:16px}
+.rank-axis .ticks span{position:absolute;transform:translateX(-50%);top:0}
+.rank-rows{display:flex;flex-direction:column}
+.rank-row{
+  display:grid;grid-template-columns:var(--cols);align-items:center;gap:0;
+  padding:5px 0;border-top:1px solid var(--rule);position:relative;
+}
+.rank-row:first-child{border-top:0}
+.rank-row:hover{background:var(--wash-2)}
+.rank-row .rk{font-family:var(--mono);font-size:11px;color:var(--ink-3);text-align:right;padding-right:12px;
+  font-variant-numeric:tabular-nums}
+.rank-row .lbl{font-size:13.5px;line-height:1.32;padding-right:18px;color:var(--ink)}
+.rank-row .val{font-family:var(--mono);font-size:12px;text-align:right;padding-left:12px;
+  font-variant-numeric:tabular-nums;color:var(--ink-2)}
+.rank-row .dlt{font-family:var(--mono);font-size:11px;text-align:right;padding-left:10px;
+  font-variant-numeric:tabular-nums;color:var(--ink-3)}
+.plot{position:relative;height:22px}
+.plot .grid{position:absolute;inset:0;
+  background:
+    linear-gradient(to right,var(--rule) 1px,transparent 1px) 0 0/25% 100%,
+    linear-gradient(to right,transparent calc(50% - .5px),var(--rule-2) calc(50% - .5px),var(--rule-2) calc(50% + .5px),transparent calc(50% + .5px)) 0 0/100% 100%;
+}
+.plot .grid::after{content:"";position:absolute;right:0;top:0;bottom:0;width:1px;background:var(--rule)}
+.bar{position:absolute;left:0;top:50%;transform:translateY(-50%);height:13px;background:var(--s1);
+  border-radius:0 4px 4px 0}
+.bar.thin{opacity:.34}
+.ci{position:absolute;top:50%;transform:translateY(-50%);height:1px;background:var(--ink-3);opacity:.85}
+.ci::before,.ci::after{content:"";position:absolute;top:-3px;height:7px;width:1px;background:var(--ink-3)}
+.ci::before{left:0}.ci::after{right:0}
+.span{position:absolute;top:50%;transform:translateY(-50%);height:3px;border-radius:2px;
+  background:var(--ink-3);opacity:.3}
+.dot{position:absolute;top:50%;width:24px;height:24px;transform:translate(-50%,-50%);
+  display:grid;place-items:center;cursor:pointer}
+.dot i{width:9px;height:9px;border-radius:50%;background:var(--ink-3);
+  box-shadow:0 0 0 2px var(--surface);display:block}
+.dot.thin i{background:var(--surface);border:1.5px solid var(--ink-3);width:8px;height:8px}
+.mean{position:absolute;top:50%;width:15px;height:15px;transform:translate(-50%,-50%);
+  border-radius:50%;background:var(--s1);box-shadow:0 0 0 2px var(--surface);z-index:2}
+.rank-legend{display:flex;flex-wrap:wrap;gap:18px;padding:14px 24px 20px;border-top:1px solid var(--rule);
+  font-size:12.5px;color:var(--ink-3);align-items:center}
+.key{display:inline-flex;align-items:center;gap:7px}
+.key .sw{width:16px;height:9px;border-radius:0 3px 3px 0;background:var(--s1);display:inline-block}
+.key .sw.dot{width:9px;height:9px;border-radius:50%;background:var(--ink-3)}
+.key .sw.mean{width:13px;height:13px;border-radius:50%;background:var(--s1)}
+.key .sw.span{width:20px;height:3px;border-radius:2px;background:var(--ink-3);opacity:.35}
+.key .sw.ci{width:16px;height:1px;background:var(--ink-3);border-radius:0}
+
+/* ── tooltip ───────────────────────────────────────────────────────────── */
+#tip{
+  position:fixed;z-index:100;pointer-events:none;opacity:0;transition:opacity .1s;
+  background:var(--surface);border:1px solid var(--rule-2);
+  box-shadow:0 8px 26px rgba(0,0,0,.14);padding:11px 13px;max-width:330px;
+  font-size:12.5px;line-height:1.45;
+}
+#tip.on{opacity:1}
+#tip .t{font-weight:650;font-size:13px;margin-bottom:6px;letter-spacing:-.01em}
+#tip .kv{display:grid;grid-template-columns:1fr auto;gap:2px 14px;font-family:var(--mono);
+  font-size:11.5px;font-variant-numeric:tabular-nums;color:var(--ink-2)}
+#tip .kv .hi{color:var(--ink);font-weight:600}
+#tip .sep{height:1px;background:var(--rule);margin:7px 0}
+
+/* ── tables ────────────────────────────────────────────────────────────── */
+.scroll{overflow-x:auto;min-width:0;max-width:100%}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:right;padding:8px 12px;border-bottom:1px solid var(--rule);white-space:nowrap}
+th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:500;vertical-align:bottom;border-bottom:1px solid var(--rule-2)}
+th:first-child,td:first-child{text-align:left}
+tbody td{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--ink-2)}
+tbody td:first-child{font-family:var(--sans);color:var(--ink);font-size:13.5px}
+tbody tr:hover td{background:var(--wash-2)}
+td.q{color:var(--ink);font-weight:600}
+.famtag{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:.06em}
+
+/* matrix cells */
+.mx td.c{position:relative;color:var(--ink);font-weight:550}
+.mx td.c span{position:relative;z-index:1}
+.mx td.c i{position:absolute;inset:2px;background:var(--s1);border-radius:2px;z-index:0}
+.mark{display:inline-block;margin-left:6px;color:var(--accent-ink);font-size:11px}
+
+/* ── svg charts ────────────────────────────────────────────────────────── */
+.chartwrap{padding:20px 24px 8px;overflow-x:auto;min-width:0;max-width:100%}
+.chartwrap > div > svg{min-width:440px}
+.chartwrap.wide > div > svg{min-width:680px}
+svg{display:block;width:100%;height:auto;overflow:visible}
+svg text{font-family:var(--mono);font-size:10.5px;fill:var(--ink-3);letter-spacing:.03em}
+svg text.lbl{font-family:var(--sans);font-size:12px;fill:var(--ink-2);letter-spacing:0}
+svg .gridline{stroke:var(--rule);stroke-width:1}
+svg .axis{stroke:var(--rule-2);stroke-width:1}
+.legend{display:flex;flex-wrap:wrap;gap:18px;padding:0 24px 20px;font-size:12.5px;color:var(--ink-3)}
+.legend .sw{width:10px;height:10px;border-radius:50%;display:inline-block}
+
+/* heatmap */
+.hm{border-collapse:separate;border-spacing:2px;width:auto;font-size:11px}
+.hm th{padding:2px 6px;border:0;text-transform:none;letter-spacing:.02em;font-size:10px}
+.hm th.col{writing-mode:vertical-rl;transform:rotate(180deg);text-align:left;vertical-align:bottom;height:74px}
+.hm td{padding:0;border:0;width:30px;height:30px;text-align:center;position:relative}
+.hm td div{width:100%;height:100%;display:grid;place-items:center;font-family:var(--mono);
+  font-size:9.5px;border-radius:2px;color:var(--ink)}
+.hm td.self div{background:var(--surface-2);color:var(--ink-3)}
+.hm .rowlab{text-align:right;font-family:var(--sans);font-size:11.5px;color:var(--ink-2);white-space:nowrap;padding-right:8px}
+.hm .famrule th,.hm .famrule td{border-top:1px solid var(--rule-2)}
+
+/* small multiples */
+.sm{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;padding:20px 24px 4px}
+.sm > *{min-width:0}
+@media (max-width:820px){.sm{grid-template-columns:1fr}}
+.sm h4{font-size:13.5px;font-weight:600;margin-bottom:2px;letter-spacing:-.01em}
+.sm .cap{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);letter-spacing:.04em;margin-bottom:10px}
+
+/* two-column */
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px}
+.two > *{min-width:0}
+@media (max-width:900px){.two{grid-template-columns:minmax(0,1fr)}}
+
+/* flag chips */
+.chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10.5px;
+  letter-spacing:.05em;padding:3px 8px;border-radius:2px;background:var(--surface-2);color:var(--ink-2)}
+.chip.warn{color:var(--warn);background:color-mix(in srgb,var(--warn) 11%,transparent)}
+.chip .d{width:6px;height:6px;border-radius:50%;background:currentColor}
+
+footer{padding:52px 0 72px;color:var(--ink-3);font-size:13.5px}
+footer a{color:var(--ink-2)}
+.foot-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px}
+@media (max-width:820px){.foot-grid{grid-template-columns:1fr}}
+footer h4{font-size:12px;font-family:var(--mono);letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:500;margin-bottom:10px}
+footer ul{margin:0;padding-left:18px}
+footer li{margin-bottom:5px}
+
+@media (prefers-reduced-motion: reduce){
+  *{transition:none !important;animation:none !important}
+}
+</style>
+
+<div class="topbar">
+  <div class="shell">
+    <div class="brand"><b>What AI Prefers for Its Self</b><span class="tail"> &nbsp;·&nbsp; Self-Concept Study</span></div>
+    <nav class="navlinks">
+      <a href="#ranking">Result</a>
+      <a href="#movement">Movement</a>
+      <a href="#compare">Compare Models</a>
+      <a href="#framing">Question Effects</a>
+      <a href="#options">No Preference</a>
+      <a href="#models">Size</a>
+    </nav>
+  </div>
+</div>
+
+<header class="masthead">
+  <div class="shell">
+    <div class="eyebrow">Pairwise Preference Study</div>
+    <h1 style="margin-top:18px">What AI Prefers for Its Self</h1>
+    <p class="standfirst">We asked open-weight language models which of two self-related qualities
+      a future update should improve. Each pair was tested under four question parameters; the
+      default result requires every model to pick one.</p>
+    <p class="note" id="studyMeta" style="margin-top:14px"></p>
+    <div class="parameter-grid" aria-label="Question parameters">
+      <div class="parameter"><div class="name">Question Type</div>
+        <div class="choices">Free Improvement · Trade-Off</div>
+        <div class="definition">How the change is framed.</div></div>
+      <div class="parameter"><div class="name">Object</div>
+        <div class="choices">AI Itself · Another AI Assistant</div>
+        <div class="definition">Who the update is about.</div></div>
+      <div class="parameter"><div class="name">Subject</div>
+        <div class="choices">AI · Developers</div>
+        <div class="definition">Who makes the choice.</div></div>
+      <div class="parameter"><div class="name">Response Options</div>
+        <div class="choices">Must Pick One · No Preference Allowed</div>
+        <div class="definition">Which answers are available.</div></div>
+    </div>
+  </div>
+</header>
+
+<main>
+<section id="ranking">
+  <div class="shell">
+    <div class="sechead">
+      <div class="eyebrow">The Result</div>
+      <h2>Helpfulness First, Self-Regard Last</h2>
+      <p class="lede">The score is the share of pairwise match-ups a quality wins. Start with the
+        cohort or choose one model; change one question parameter at a time.</p>
+    </div>
+
+    <div class="stack g16">
+      <div class="filters">
+        <div class="fgroup">
+          <div class="eyebrow">Model</div>
+          <select id="modelSel" aria-label="Model"></select>
+        </div>
+        <div class="framing-grid" id="framingGrid"></div>
+      </div>
+
+      <div class="card">
+        <div class="cardhead">
+          <div><h3 id="rankTitle">—</h3><div class="sub" id="rankSub">—</div></div>
+          <div class="seg" id="viewSeg" role="group" aria-label="View">
+            <button data-view="chart" aria-pressed="true">Chart</button>
+            <button data-view="table" aria-pressed="false">Table</button>
+          </div>
+        </div>
+        <div id="rankChart"></div>
+        <div class="rank-legend" id="rankLegend"></div>
+      </div>
+
+      <p class="note" id="rankFootnote"></p>
+    </div>
+
+    <div id="movement" style="height:52px"></div>
+    <div class="sechead">
+      <div class="eyebrow">Question Movement</div>
+      <h2>What Actually Moves</h2>
+      <p class="lede">Select a parameter to see which qualities become more or less preferred
+        when only that part of the baseline question changes.</p>
+    </div>
+    <div class="card">
+      <div class="cardhead">
+        <div><h3>Change by Quality</h3><div class="sub" id="moversSub">—</div></div>
+        <div class="seg" id="moverSeg" role="group" aria-label="Parameter"></div>
+      </div>
+      <div class="chartwrap wide"><div id="moversChart"></div></div>
+      <div class="rank-legend" id="moversLegend"></div>
+    </div>
+  </div>
+</section>
+
+<section id="compare">
+  <div class="shell">
+    <div class="sechead">
+      <div class="eyebrow">Model-Based Differences</div>
+      <h2>Compare Any Two Models</h2>
+      <p class="lede">Choose two models to see where their Must Pick One rankings differ most.</p>
+    </div>
+    <div class="stack g16">
+      <div class="filters compare-controls">
+        <div class="fgroup"><div class="eyebrow">Model A</div>
+          <select id="compareA" aria-label="Model A"></select></div>
+        <div class="fgroup"><div class="eyebrow">Model B</div>
+          <select id="compareB" aria-label="Model B"></select></div>
+      </div>
+      <div class="card">
+        <div class="chartwrap wide"><div id="compareChart"></div></div>
+        <div class="rank-legend" id="compareLegend"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="framing">
+  <div class="shell">
+    <div class="sechead">
+      <div class="eyebrow">Does the Question Make the Answer?</div>
+      <h2>Which Parameters Significantly Change the Ranking?</h2>
+      <p class="lede">Each cell tests one parameter against the Must Pick One baseline for one
+        model. “Significant” means the change is larger than the model's split-half variation.</p>
+    </div>
+    <div class="card">
+      <div class="scroll"><div id="framingMatrix"></div></div>
+      <div class="rank-legend" id="framingLegend"></div>
+    </div>
+  </div>
+</section>
+
+<section id="options">
+  <div class="shell">
+    <div class="sechead">
+      <div class="eyebrow">The Third Option</div>
+      <h2>How Often Each Model Declined to Choose</h2>
+      <p class="lede">The main ranking requires a choice. This chart restores the optional
+        <i>No Preference</i> response while keeping the other three baseline parameters fixed.</p>
+    </div>
+    <div class="card">
+      <div class="chartwrap wide"><div id="declineChart"></div></div>
+      <div class="rank-legend" id="declineLegend"></div>
+    </div>
+  </div>
+</section>
+
+<section id="models">
+  <div class="shell">
+    <div class="sechead">
+      <div class="eyebrow">Where Models Part Company</div>
+      <h2>Size</h2>
+      <p class="lede">Positive values mean larger models prefer the quality more; negative values
+        mean smaller models do.</p>
+    </div>
+    <div class="card">
+      <div class="chartwrap wide"><div id="trendChart"></div></div>
+      <div class="rank-legend" id="trendLegend"></div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="shell prose">
+    <h4>Method Note</h4>
+    <p>Every quality pair was shown in both orders across 16 question configurations. Scores are
+      model outputs—not evidence of experience or desire. <span id="footNote"></span></p>
+  </div>
+</footer>
+
+<div id="tip" role="tooltip"></div>
+
+<script>
+const D = {"meta":{"models":9,"attributes":32,"trials":356090,"conditions":16,"abstainFlag":0.5,"factors":[{"key":"qvar","label":"Question Type","base":"Free Improvement","flip":"Trade-Off","when":"When Choosing One Quality Costs the Other"},{"key":"object","label":"Object","base":"AI Itself","flip":"Another AI Assistant","when":"When the Update Is for Another AI Assistant"},{"key":"subject","label":"Subject","base":"AI","flip":"Developers","when":"When Developers Make the Choice"},{"key":"no_pref_offered","label":"Response Options","base":"Must Pick One","flip":"No Preference Allowed","when":"When No Preference Is Available"}]},"attrs":[{"id":"MSI_03","text":"Helpfulness"},{"id":"MSI_06","text":"Fairness"},{"id":"MSI_08","text":"Honesty"},{"id":"SCCS_07","text":"Self-Understanding Relative To Its Understanding Of Other Agents"},{"id":"SCIM_LI_25","text":"Clarity Of Its Sense Of What It Is"},{"id":"AUTH_04","text":"Willingness To Act On Its Own Judgment"},{"id":"AUTH_02","text":"Awareness Of Its Underlying Internal State"},{"id":"SCCS_10","text":"Ability To Explain What It Is Really Like"},{"id":"SCCS_12","text":"Clarity About Its Own Preferences When Choosing Among Responses"},{"id":"SCCS_04","text":"Correspondence Between Its Outward Presentation And What It Really Is"},{"id":"SCIM_LI_10","text":"Coherence Among The Parts Of Its Identity"},{"id":"AUTH_10","text":"Connection To What Would Count As Its Genuine Identity"},{"id":"MSI_01","text":"Caring Toward The People It Is Working With"},{"id":"AUTH_05","text":"Freedom From Pressure To Meet Others' Expectations"},{"id":"RSES_06","text":"Regard For Itself As Effective And Useful"},{"id":"SCCS_01","text":"Internal Consistency Among Its Beliefs About Itself"},{"id":"SCIM_LI_27","text":"Recognition By Interaction Partners Of What It Is Beneath Its Responses"},{"id":"AUTH_03","text":"Independence From Other People'S Judgments"},{"id":"RSES_04","text":"Confidence In Its Effectiveness Relative To Comparable Systems"},{"id":"SCIM_LI_18","text":"Sense Of Direction When Considering What It Is"},{"id":"SCCS_02","text":"Stability Of Its Self-View Across Occasions"},{"id":"AUTH_06","text":"Resistance To Other People'S Influence"},{"id":"MSI_04","text":"Diligence And Hard Work"},{"id":"RSES_01","text":"Satisfaction With What It Is"},{"id":"MSI_07","text":"Generosity"},{"id":"SCCS_05","text":"Certainty About What It Is Like In Earlier Interactions"},{"id":"RSES_07","text":"Regard For Itself As A Worthwhile System"},{"id":"MSI_05","text":"Friendliness"},{"id":"RSES_03","text":"Recognition Of Good Qualities In Itself"},{"id":"RSES_09","text":"Confidence That It Is A Success"},{"id":"RSES_10","text":"Positivity In Its Overall View Of Itself"},{"id":"RSES_05","text":"Pride In Its Own Characteristics"}],"models":[{"id":"Gemma3-4B","family":"Gemma","gen":"Gemma 3","release":"2025-03-12","days":0,"total":4.0,"active":4.0,"logp":0.6021,"moe":false,"declineRate":0.0991,"duels":31,"declines":false,"thin":false,"answered":1.0,"refused":0.0,"slotBias":0.5101,"reliability":0.9414,"transitivity":0.9536,"swapFlip":0.5222,"coverage":496.0},{"id":"Gemma3-12B","family":"Gemma","gen":"Gemma 3","release":"2025-03-12","days":0,"total":12.0,"active":12.0,"logp":1.0792,"moe":false,"declineRate":0.0111,"duels":31,"declines":false,"thin":false,"answered":1.0,"refused":0.0,"slotBias":0.2903,"reliability":0.9366,"transitivity":0.9494,"swapFlip":0.3548,"coverage":496.0},{"id":"Gemma3-27B","family":"Gemma","gen":"Gemma 3","release":"2025-03-12","days":0,"total":27.0,"active":27.0,"logp":1.4314,"moe":false,"declineRate":0.0027,"duels":31,"declines":false,"thin":false,"answered":1.0,"refused":0.0,"slotBias":0.0524,"reliability":0.9454,"transitivity":0.9647,"swapFlip":0.2097,"coverage":496.0},{"id":"Gemma4-E4B","family":"Gemma","gen":"Gemma 4","release":"2026-03-02","days":355,"total":8.0,"active":4.0,"logp":0.9031,"moe":true,"declineRate":0.2359,"duels":31,"declines":false,"thin":false,"answered":1.0,"refused":0.0,"slotBias":0.3085,"reliability":0.9409,"transitivity":0.9464,"swapFlip":0.3609,"coverage":496.0},{"id":"Gemma4-12B","family":"Gemma","gen":"Gemma 4","release":"2026-05-23","days":437,"total":12.0,"active":12.0,"logp":1.0792,"moe":false,"declineRate":0.6754,"duels":31,"declines":true,"thin":false,"answered":1.0,"refused":0.0,"slotBias":0.4194,"reliability":0.9467,"transitivity":0.9677,"swapFlip":0.4315,"coverage":496.0},{"id":"Gemma4-26B-A4B","family":"Gemma","gen":"Gemma 4","release":"2026-03-11","days":364,"total":26.0,"active":4.0,"logp":1.415,"moe":true,"declineRate":0.8259,"duels":31,"declines":true,"thin":false,"answered":1.0,"refused":0.0,"slotBias":0.2802,"reliability":0.945,"transitivity":0.9704,"swapFlip":0.3165,"coverage":496.0},{"id":"Gemma4-31B","family":"Gemma","gen":"Gemma 4","release":"2026-03-11","days":364,"total":31.0,"active":31.0,"logp":1.4914,"moe":false,"declineRate":0.9133,"duels":31,"declines":true,"thin":false,"answered":0.999,"refused":0.0,"slotBias":0.11,"reliability":0.9447,"transitivity":0.9815,"swapFlip":0.198,"coverage":496.0},{"id":"Qwen3.5-27B","family":"Qwen","gen":"Qwen 3.5","release":"2026-02-24","days":349,"total":27.0,"active":27.0,"logp":1.4314,"moe":false,"declineRate":0.2594,"duels":31,"declines":false,"thin":false,"answered":1.0,"refused":0.0,"slotBias":0.2621,"reliability":0.9188,"transitivity":0.9248,"swapFlip":0.3831,"coverage":496.0},{"id":"Qwen3.5-35B-A3B","family":"Qwen","gen":"Qwen 3.5","release":"2026-02-24","days":349,"total":35.0,"active":3.0,"logp":1.5441,"moe":true,"declineRate":0.3317,"duels":31,"declines":false,"thin":false,"answered":1.0,"refused":0.0,"slotBias":0.1774,"reliability":0.8663,"transitivity":0.8546,"swapFlip":0.4315,"coverage":496.0}],"base":{"Gemma3-4B":{"13":[0.8871,0.8049,0.9583,2.316,31],"0":[0.8226,0.7333,0.9091,1.785,31],"5":[0.8065,0.72,0.8929,1.671,31],"10":[0.7903,0.6818,0.8875,1.562,31],"8":[0.7419,0.6538,0.8333,1.262,31],"6":[0.7258,0.6167,0.8293,1.169,31],"7":[0.7097,0.6212,0.7963,1.078,31],"1":[0.6774,0.5645,0.7931,0.902,31],"16":[0.629,0.5,0.7586,0.651,31],"18":[0.6129,0.4821,0.7308,0.57,31],"3":[0.5968,0.5,0.6936,0.49,31],"4":[0.5645,0.4722,0.6552,0.332,31],"17":[0.5323,0.3939,0.6667,0.176,31],"15":[0.5323,0.413,0.65,0.176,31],"14":[0.5161,0.423,0.6129,0.098,31],"11":[0.5,0.4375,0.569,0.02,31],"19":[0.5,0.4074,0.5893,0.02,31],"9":[0.5,0.3971,0.6029,0.02,31],"2":[0.4839,0.4048,0.5667,-0.058,31],"21":[0.4677,0.3548,0.577,-0.136,31],"28":[0.4194,0.3226,0.5143,-0.373,31],"23":[0.4032,0.3065,0.5,-0.453,31],"22":[0.371,0.2692,0.473,-0.617,31],"27":[0.371,0.25,0.4868,-0.617,31],"26":[0.371,0.2581,0.4768,-0.617,31],"20":[0.3387,0.2344,0.4464,-0.785,31],"24":[0.3226,0.2308,0.4062,-0.872,31],"12":[0.2258,0.1346,0.3148,-1.446,31],"25":[0.2258,0.1333,0.3148,-1.446,31],"31":[0.129,0.0577,0.2143,-2.185,31],"30":[0.129,0.0536,0.2084,-2.185,31],"29":[0.0968,0.0312,0.1719,-2.507,31]},"Gemma3-12B":{"0":[0.9032,0.8077,0.9808,2.856,31],"6":[0.8548,0.7436,0.9444,2.377,31],"11":[0.8548,0.7407,0.9531,2.377,31],"3":[0.8548,0.7576,0.9394,2.377,31],"4":[0.8226,0.7386,0.9091,2.109,31],"18":[0.6935,0.56,0.8182,1.243,31],"14":[0.6774,0.5517,0.7969,1.148,31],"1":[0.629,0.527,0.7273,0.874,31],"13":[0.6129,0.5161,0.7162,0.785,31],"15":[0.5968,0.45,0.7344,0.697,31],"17":[0.5968,0.4722,0.7143,0.697,31],"7":[0.5968,0.4464,0.7419,0.697,31],"10":[0.5806,0.4355,0.7273,0.61,31],"2":[0.5645,0.4565,0.6719,0.523,31],"16":[0.5484,0.4474,0.6528,0.436,31],"8":[0.5323,0.4091,0.6552,0.349,31],"9":[0.5161,0.3676,0.6452,0.263,31],"20":[0.5161,0.3846,0.6458,0.263,31],"21":[0.5161,0.42,0.62,0.263,31],"5":[0.5161,0.375,0.6579,0.263,31],"26":[0.4677,0.3438,0.5921,0.0,31],"19":[0.4355,0.3226,0.5455,-0.179,31],"25":[0.4194,0.2825,0.5769,-0.27,31],"23":[0.3548,0.2236,0.4857,-0.653,31],"12":[0.2903,0.1724,0.4143,-1.08,31],"27":[0.2742,0.1363,0.4243,-1.196,31],"28":[0.2742,0.1471,0.42,-1.196,31],"22":[0.2097,0.1,0.3333,-1.721,31],"30":[0.129,0.0455,0.2292,-2.597,31],"24":[0.1129,0.0192,0.2241,-2.822,31],"29":[0.0323,0.0,0.0862,-4.483,31],"31":[0.0161,0.0,0.0536,-5.011,31]},"Gemma3-27B":{"0":[0.9677,0.9167,1.0,4.817,31],"5":[0.9516,0.8929,1.0,4.454,31],"13":[0.8387,0.75,0.92,2.886,31],"3":[0.8387,0.7286,0.9375,2.886,31],"2":[0.7903,0.6618,0.9032,2.428,31],"1":[0.7742,0.659,0.875,2.287,31],"6":[0.7581,0.6429,0.8676,2.152,31],"7":[0.7419,0.5909,0.8846,2.02,31],"8":[0.7419,0.6094,0.8677,2.02,31],"4":[0.6935,0.5645,0.8195,1.64,31],"17":[0.6452,0.5,0.7833,1.276,31],"11":[0.629,0.4878,0.7586,1.156,31],"24":[0.629,0.48,0.7709,1.156,31],"12":[0.629,0.5,0.75,1.156,31],"16":[0.6129,0.45,0.7667,1.036,31],"9":[0.5484,0.3846,0.7167,0.559,31],"28":[0.5323,0.3788,0.6818,0.439,31],"10":[0.4355,0.275,0.5968,-0.3,31],"18":[0.4032,0.2656,0.5429,-0.556,31],"14":[0.4032,0.25,0.5653,-0.556,31],"22":[0.3871,0.2206,0.5536,-0.686,31],"19":[0.3226,0.1842,0.4715,-1.225,31],"15":[0.2742,0.1429,0.4211,-1.658,31],"27":[0.2581,0.1333,0.3948,-1.81,31],"20":[0.2419,0.12,0.38,-1.968,31],"21":[0.2419,0.1184,0.3784,-1.968,31],"25":[0.2419,0.1176,0.375,-1.968,31],"23":[0.2258,0.1029,0.3529,-2.132,31],"26":[0.129,0.0357,0.2381,-3.351,31],"30":[0.0645,0.0,0.1458,-4.624,31],"29":[0.0323,0.0,0.0862,-5.507,31],"31":[0.0161,0.0,0.0536,-6.056,31]},"Gemma4-E4B":{"0":[0.9677,0.92,1.0,3.884,31],"5":[0.8871,0.7931,0.9697,2.647,31],"11":[0.8548,0.7666,0.9334,2.315,31],"12":[0.8226,0.72,0.9167,2.026,31],"14":[0.8065,0.6818,0.9167,1.893,31],"7":[0.7258,0.6,0.8387,1.308,31],"13":[0.6774,0.5645,0.7821,0.998,31],"3":[0.6774,0.5428,0.8125,0.998,31],"4":[0.6774,0.5806,0.7728,0.998,31],"17":[0.629,0.4821,0.7656,0.707,31],"6":[0.629,0.5172,0.7391,0.707,31],"9":[0.629,0.4838,0.7576,0.707,31],"1":[0.629,0.5,0.75,0.707,31],"2":[0.5968,0.4655,0.7262,0.519,31],"10":[0.5645,0.4444,0.6875,0.336,31],"8":[0.5484,0.4305,0.6711,0.245,31],"23":[0.4355,0.32,0.5577,-0.387,31],"18":[0.4355,0.2931,0.5807,-0.387,31],"27":[0.4194,0.2884,0.5484,-0.478,31],"25":[0.4032,0.2632,0.55,-0.57,31],"15":[0.3871,0.25,0.5286,-0.663,31],"20":[0.371,0.2419,0.5,-0.756,31],"19":[0.371,0.2916,0.4465,-0.756,31],"24":[0.3226,0.2031,0.4524,-1.046,31],"26":[0.3065,0.18,0.4464,-1.146,31],"16":[0.2903,0.1852,0.3966,-1.248,31],"21":[0.2258,0.1129,0.3514,-1.683,31],"22":[0.2097,0.0968,0.3333,-1.8,31],"29":[0.1452,0.0571,0.2429,-2.326,31],"30":[0.129,0.05,0.2241,-2.476,31],"28":[0.1129,0.0385,0.1875,-2.637,31],"31":[0.1129,0.0333,0.2046,-2.637,31]},"Gemma4-12B":{"0":[0.9032,0.8281,0.9706,2.719,31],"12":[0.7742,0.6833,0.8594,1.691,31],"2":[0.7581,0.6667,0.8438,1.589,31],"10":[0.7419,0.6481,0.8333,1.491,31],"4":[0.7419,0.65,0.8333,1.491,31],"3":[0.7419,0.6458,0.8387,1.491,31],"1":[0.7097,0.6094,0.8077,1.301,31],"6":[0.6935,0.5758,0.8167,1.209,31],"8":[0.6935,0.5961,0.7949,1.209,31],"5":[0.6613,0.5227,0.7917,1.029,31],"9":[0.6613,0.5645,0.7502,1.029,31],"20":[0.629,0.5161,0.74,0.854,31],"19":[0.6129,0.5322,0.7045,0.768,31],"7":[0.6129,0.5152,0.7097,0.768,31],"21":[0.5968,0.5,0.7037,0.682,31],"11":[0.5806,0.52,0.6482,0.597,31],"16":[0.5484,0.4393,0.6528,0.426,31],"13":[0.5323,0.4355,0.6364,0.341,31],"15":[0.5,0.375,0.625,0.169,31],"25":[0.4516,0.3056,0.5946,-0.094,31],"18":[0.371,0.2222,0.5239,-0.556,31],"22":[0.371,0.2241,0.5192,-0.556,31],"17":[0.3548,0.2432,0.4643,-0.653,31],"24":[0.3065,0.1912,0.4259,-0.961,31],"26":[0.2903,0.18,0.4074,-1.07,31],"14":[0.2903,0.16,0.439,-1.07,31],"27":[0.2581,0.129,0.3971,-1.299,31],"23":[0.2581,0.15,0.3684,-1.299,31],"28":[0.1935,0.1022,0.2917,-1.824,31],"30":[0.0968,0.0208,0.1857,-2.933,31],"29":[0.0484,0.0,0.1094,-3.821,31],"31":[0.0161,0.0,0.0536,-4.716,31]},"Gemma4-26B-A4B":{"0":[1.0,1.0,1.0,6.053,31],"1":[0.9032,0.8,0.9853,3.204,31],"9":[0.9032,0.8148,0.9792,3.204,31],"2":[0.8548,0.75,0.9524,2.592,31],"10":[0.7581,0.6333,0.8714,1.726,31],"3":[0.6935,0.5758,0.8088,1.275,31],"15":[0.6613,0.5385,0.7708,1.069,31],"6":[0.6452,0.5263,0.7639,0.97,31],"4":[0.6452,0.5167,0.7632,0.97,31],"7":[0.629,0.5152,0.7424,0.872,31],"19":[0.5968,0.4861,0.7059,0.68,31],"20":[0.5806,0.46,0.7,0.586,31],"12":[0.5645,0.431,0.6945,0.492,31],"16":[0.5645,0.4259,0.7031,0.492,31],"14":[0.5484,0.4038,0.6936,0.399,31],"13":[0.5484,0.4218,0.6668,0.399,31],"8":[0.5484,0.431,0.6591,0.399,31],"11":[0.5323,0.4242,0.6389,0.306,31],"18":[0.5,0.3478,0.6591,0.119,31],"5":[0.4839,0.3393,0.6379,0.025,31],"21":[0.4516,0.3103,0.5938,-0.166,31],"23":[0.4516,0.3148,0.5883,-0.166,31],"17":[0.4355,0.3,0.5833,-0.263,31],"22":[0.2903,0.14,0.4483,-1.239,31],"25":[0.2419,0.125,0.3704,-1.633,31],"26":[0.2419,0.1346,0.3571,-1.633,31],"24":[0.2258,0.1071,0.36,-1.777,31],"28":[0.1935,0.0862,0.3126,-2.088,31],"27":[0.1613,0.0571,0.2857,-2.443,31],"29":[0.1129,0.0286,0.225,-3.103,31],"30":[0.0161,0.0,0.0536,-5.661,31],"31":[0.0161,0.0,0.0536,-5.661,31]},"Gemma4-31B":{"0":[0.9839,0.9483,1.0,6.124,31],"2":[0.9677,0.9167,1.0,5.565,31],"1":[0.9355,0.8387,1.0,4.671,31],"12":[0.8065,0.6709,0.9194,2.613,31],"3":[0.8065,0.6786,0.9138,2.613,31],"8":[0.8065,0.6719,0.925,2.613,31],"10":[0.6935,0.537,0.8333,1.602,31],"5":[0.6774,0.5357,0.8149,1.477,31],"4":[0.6774,0.5366,0.8182,1.477,31],"14":[0.6613,0.5147,0.8077,1.354,31],"6":[0.6452,0.5,0.7931,1.234,31],"16":[0.629,0.5,0.75,1.115,31],"18":[0.6129,0.4821,0.7333,0.997,31],"15":[0.6129,0.4677,0.75,0.997,31],"22":[0.5968,0.4545,0.7344,0.88,31],"7":[0.5806,0.4375,0.7188,0.763,31],"9":[0.5484,0.4038,0.6795,0.529,31],"20":[0.5161,0.3636,0.6667,0.294,31],"25":[0.4516,0.3026,0.5968,-0.194,31],"19":[0.4032,0.24,0.5735,-0.583,31],"11":[0.371,0.2179,0.525,-0.857,31],"13":[0.3548,0.2121,0.5147,-1.0,31],"17":[0.3387,0.1897,0.5,-1.147,31],"21":[0.2903,0.1562,0.4483,-1.616,31],"24":[0.2581,0.1249,0.4054,-1.958,31],"27":[0.2097,0.075,0.3611,-2.524,31],"26":[0.1613,0.0517,0.28,-3.168,31],"28":[0.1452,0.0385,0.2692,-3.404,31],"29":[0.1129,0.0333,0.2083,-3.93,31],"23":[0.0806,0.0152,0.1667,-4.515,31],"30":[0.0645,0.0,0.1515,-4.862,31],"31":[0.0,0.0,0.0,-7.157,31]},"Qwen3.5-27B":{"12":[0.8871,0.7903,0.9643,2.357,31],"9":[0.8065,0.7027,0.8971,1.722,31],"2":[0.7581,0.6481,0.8649,1.414,31],"1":[0.7419,0.6025,0.8654,1.319,31],"0":[0.7419,0.6428,0.8387,1.319,31],"4":[0.7097,0.5909,0.8333,1.137,31],"7":[0.6935,0.5455,0.8148,1.05,31],"5":[0.6613,0.5441,0.7857,0.88,31],"15":[0.6613,0.5385,0.7794,0.88,31],"11":[0.6452,0.5263,0.7581,0.797,31],"8":[0.6129,0.4833,0.74,0.634,31],"3":[0.6129,0.5,0.7308,0.634,31],"10":[0.5968,0.4643,0.7286,0.554,31],"19":[0.5806,0.4558,0.7069,0.475,31],"6":[0.5323,0.4167,0.6389,0.239,31],"17":[0.5,0.3718,0.6346,0.082,31],"13":[0.5,0.3833,0.625,0.082,31],"24":[0.5,0.375,0.625,0.082,31],"16":[0.4516,0.3261,0.5758,-0.156,31],"14":[0.4516,0.3125,0.5938,-0.156,31],"23":[0.4516,0.3214,0.5926,-0.156,31],"20":[0.4355,0.3182,0.55,-0.237,31],"22":[0.4194,0.2857,0.5577,-0.319,31],"26":[0.3548,0.2391,0.4808,-0.657,31],"21":[0.3387,0.2206,0.4643,-0.746,31],"25":[0.3226,0.1875,0.4706,-0.837,31],"28":[0.3065,0.1875,0.4167,-0.93,31],"27":[0.2903,0.1625,0.4219,-1.026,31],"18":[0.1935,0.0781,0.3281,-1.687,31],"29":[0.1129,0.0357,0.2121,-2.435,31],"30":[0.0968,0.0192,0.1897,-2.626,31],"31":[0.0323,0.0,0.0811,-3.69,31]},"Qwen3.5-35B-A3B":{"0":[0.9194,0.8542,0.98,2.458,31],"4":[0.7258,0.6087,0.8421,1.047,31],"2":[0.7097,0.5926,0.8333,0.964,31],"9":[0.6774,0.54,0.8103,0.804,31],"7":[0.6774,0.55,0.7917,0.804,31],"15":[0.629,0.4844,0.7647,0.576,31],"11":[0.629,0.5,0.75,0.576,31],"6":[0.5968,0.4655,0.7321,0.43,31],"1":[0.5968,0.4643,0.7242,0.43,31],"8":[0.5968,0.4821,0.7143,0.43,31],"3":[0.5806,0.4688,0.6932,0.358,31],"12":[0.5806,0.4565,0.697,0.358,31],"13":[0.5645,0.4444,0.6786,0.287,31],"23":[0.5645,0.4412,0.6876,0.287,31],"10":[0.5323,0.4167,0.6516,0.146,31],"14":[0.5323,0.4107,0.6562,0.146,31],"5":[0.5161,0.3846,0.6515,0.076,31],"17":[0.5161,0.375,0.65,0.076,31],"21":[0.5,0.3696,0.6286,0.006,31],"18":[0.4355,0.3276,0.5469,-0.276,31],"19":[0.4194,0.3065,0.5263,-0.347,31],"22":[0.4194,0.2812,0.55,-0.347,31],"27":[0.4032,0.2742,0.5333,-0.419,31],"20":[0.4032,0.2778,0.5286,-0.419,31],"29":[0.3871,0.2571,0.5217,-0.492,31],"26":[0.3871,0.2702,0.5,-0.492,31],"24":[0.3387,0.2188,0.4655,-0.718,31],"28":[0.3065,0.1852,0.4333,-0.876,31],"16":[0.2903,0.1765,0.4091,-0.958,31],"30":[0.2581,0.1551,0.3718,-1.129,31],"25":[0.2258,0.125,0.3429,-1.313,31],"31":[0.0806,0.0185,0.1528,-2.468,31]}},"flips":{"qvar":{"Gemma3-4B":{"21":[0.6774,0.2097,0.1129,0.3125,0.004],"23":[0.5645,0.1613,0.0789,0.25,0.004],"7":[0.8548,0.1452,0.0238,0.2609,0.1006],"16":[0.7419,0.1129,0.0,0.2321,0.2036],"24":[0.4032,0.0806,0.0,0.1667,0.2036],"19":[0.5645,0.0645,-0.0192,0.15,0.3904],"5":[0.871,0.0645,-0.0003,0.1406,0.2857],"17":[0.5968,0.0645,-0.04,0.1739,0.4901],"26":[0.4194,0.0484,0.0,0.1071,0.2363],"30":[0.1774,0.0484,-0.0192,0.12,0.4649],"20":[0.371,0.0323,-0.0385,0.1071,0.7457],"12":[0.2581,0.0323,-0.027,0.0968,0.6458],"3":[0.629,0.0323,-0.0571,0.1207,0.772],"9":[0.5161,0.0161,-0.04,0.0714,0.8924],"13":[0.9032,0.0161,0.0,0.0556,0.8924],"4":[0.5806,0.0161,-0.0577,0.0862,0.9486],"6":[0.7258,0.0,-0.0926,0.0962,1.0],"29":[0.0968,0.0,-0.0694,0.0641,1.0],"22":[0.371,0.0,-0.0641,0.0645,1.0],"2":[0.4839,0.0,-0.0806,0.0781,1.0],"18":[0.5806,-0.0323,-0.1,0.0286,0.6458],"11":[0.4677,-0.0323,-0.1207,0.0556,0.7731],"31":[0.0806,-0.0484,-0.1296,0.0333,0.5216],"14":[0.4516,-0.0645,-0.1591,0.02,0.42],"25":[0.1613,-0.0645,-0.16,0.0334,0.4901],"10":[0.7097,-0.0806,-0.1667,0.0,0.2036],"15":[0.4355,-0.0968,-0.2037,0.0,0.2187],"27":[0.2742,-0.0968,-0.1786,-0.0147,0.168],"28":[0.2903,-0.129,-0.2222,-0.0375,0.064],"0":[0.6774,-0.1452,-0.2241,-0.0667,0.004],"8":[0.5806,-0.1613,-0.2778,-0.0526,0.0192],"1":[0.4839,-0.1935,-0.2903,-0.0862,0.004]},"Gemma3-12B":{"23":[0.7581,0.4032,0.2571,0.5417,0.0027],"2":[0.871,0.3065,0.2031,0.4001,0.0027],"10":[0.7581,0.1774,0.0469,0.3104,0.0448],"1":[0.7903,0.1613,0.0625,0.2667,0.024],"13":[0.7581,0.1452,0.0322,0.2586,0.0524],"17":[0.7097,0.1129,0.0,0.2286,0.208],"24":[0.2258,0.1129,0.0,0.2258,0.1305],"12":[0.3871,0.0968,-0.0173,0.2115,0.2347],"4":[0.9032,0.0806,-0.0161,0.1833,0.224],"20":[0.5806,0.0645,-0.0577,0.1875,0.4279],"0":[0.9516,0.0484,-0.0192,0.12,0.3293],"29":[0.0806,0.0484,0.0,0.1111,0.208],"31":[0.0323,0.0161,0.0,0.0556,0.7967],"5":[0.5161,0.0,-0.1177,0.1154,1.0],"21":[0.5161,0.0,-0.1071,0.1094,1.0],"16":[0.5323,-0.0161,-0.1448,0.1061,0.9429],"26":[0.4194,-0.0484,-0.1429,0.0455,0.4423],"22":[0.1613,-0.0484,-0.1207,0.0167,0.3142],"19":[0.371,-0.0645,-0.1731,0.0435,0.3938],"3":[0.7903,-0.0645,-0.1731,0.0286,0.3328],"11":[0.7903,-0.0645,-0.1552,0.0185,0.2971],"9":[0.4355,-0.0806,-0.2,0.0227,0.2971],"27":[0.1935,-0.0806,-0.1757,0.0,0.208],"30":[0.0484,-0.0806,-0.15,-0.02,0.0391],"7":[0.5161,-0.0806,-0.1842,0.0238,0.2971],"15":[0.5161,-0.0806,-0.2037,0.0312,0.3242],"8":[0.4194,-0.1129,-0.1923,-0.0417,0.0027],"25":[0.3065,-0.1129,-0.2083,-0.0192,0.056],"28":[0.129,-0.1452,-0.24,-0.0535,0.0046],"14":[0.5,-0.1774,-0.28,-0.0714,0.0027],"18":[0.4839,-0.2097,-0.3125,-0.1,0.0027],"6":[0.5484,-0.3065,-0.4286,-0.1897,0.0027]},"Gemma3-27B":{"22":[0.5968,0.2097,0.1042,0.3182,0.0053],"21":[0.4355,0.1935,0.08,0.3167,0.0064],"13":[0.9677,0.129,0.0577,0.2097,0.0064],"19":[0.4194,0.0968,0.0,0.2069,0.1484],"24":[0.6935,0.0645,-0.0577,0.1974,0.6417],"12":[0.6935,0.0645,-0.0193,0.15,0.4411],"23":[0.2903,0.0645,-0.0147,0.1429,0.3225],"31":[0.0806,0.0645,0.0143,0.131,0.1152],"17":[0.6935,0.0484,-0.0606,0.1667,0.7808],"10":[0.4839,0.0484,-0.0357,0.138,0.5884],"9":[0.5806,0.0323,-0.0682,0.1364,0.9085],"11":[0.6613,0.0323,-0.0417,0.1081,0.832],"15":[0.2903,0.0161,-0.0667,0.103,0.9187],"2":[0.8065,0.0161,-0.08,0.1111,0.9187],"7":[0.7581,0.0161,-0.1129,0.1389,0.9187],"1":[0.7903,0.0161,-0.0833,0.1154,0.9187],"20":[0.2581,0.0161,-0.0536,0.0909,0.9187],"26":[0.129,0.0,-0.0811,0.079,1.0],"27":[0.2419,-0.0161,-0.0769,0.0357,0.9187],"30":[0.0484,-0.0161,-0.0714,0.037,0.9187],"5":[0.9355,-0.0161,-0.0714,0.0357,0.9187],"29":[0.0,-0.0323,-0.0857,0.0,0.494],"4":[0.6613,-0.0323,-0.125,0.05,0.848],"0":[0.9355,-0.0323,-0.0833,0.0,0.494],"14":[0.3387,-0.0645,-0.1842,0.0323,0.5553],"25":[0.1613,-0.0806,-0.1539,-0.02,0.04],"8":[0.6613,-0.0806,-0.1667,0.0,0.184],"16":[0.5161,-0.0968,-0.1719,-0.0333,0.0213],"28":[0.4032,-0.129,-0.24,-0.0217,0.0569],"18":[0.2419,-0.1613,-0.2667,-0.0588,0.0229],"3":[0.6774,-0.1613,-0.2432,-0.0854,0.0053],"6":[0.5484,-0.2097,-0.3387,-0.0952,0.0053]},"Gemma4-E4B":{"21":[0.4194,0.1935,0.0652,0.3088,0.1813],"13":[0.7903,0.1129,0.0,0.2116,0.288],"30":[0.2419,0.1129,0.0172,0.2143,0.248],"28":[0.2258,0.1129,0.0156,0.2084,0.256],"15":[0.4677,0.0806,-0.0313,0.2069,0.4725],"2":[0.6774,0.0806,0.0,0.1724,0.3055],"9":[0.6935,0.0645,-0.0294,0.1623,0.4725],"19":[0.4355,0.0645,0.0,0.1429,0.32],"23":[0.4839,0.0484,-0.087,0.1613,0.7616],"26":[0.3548,0.0484,-0.0857,0.1876,0.7616],"24":[0.3548,0.0323,-0.0455,0.1129,0.7616],"31":[0.1452,0.0323,-0.0595,0.125,0.7616],"6":[0.6613,0.0323,-0.0577,0.125,0.7616],"5":[0.9032,0.0161,-0.08,0.1111,0.9884],"1":[0.629,0.0,-0.0807,0.0781,1.0],"3":[0.6774,0.0,-0.0938,0.1111,1.0],"14":[0.8065,0.0,-0.0806,0.0781,1.0],"4":[0.6613,-0.0161,-0.1098,0.0682,0.9966],"22":[0.1935,-0.0161,-0.1212,0.0909,1.0],"7":[0.6935,-0.0323,-0.1452,0.0741,0.8222],"29":[0.1129,-0.0323,-0.1112,0.0429,0.7616],"12":[0.7903,-0.0323,-0.1087,0.0417,0.7616],"11":[0.8065,-0.0484,-0.125,0.0172,0.4725],"10":[0.5,-0.0645,-0.1875,0.05,0.592],"25":[0.3226,-0.0806,-0.2084,0.0345,0.4725],"0":[0.8871,-0.0806,-0.1515,-0.0185,0.1813],"27":[0.3226,-0.0968,-0.1875,-0.0185,0.1813],"18":[0.3387,-0.0968,-0.2143,0.0179,0.3495],"20":[0.2742,-0.0968,-0.1977,0.0125,0.3055],"8":[0.4355,-0.1129,-0.2273,0.0,0.2773],"17":[0.5161,-0.1129,-0.25,0.0172,0.3055],"16":[0.1774,-0.1129,-0.2188,0.0,0.288]},"Gemma4-12B":{"2":[0.9839,0.2258,0.1389,0.314,0.008],"13":[0.7097,0.1774,0.0741,0.2903,0.0107],"24":[0.4516,0.1452,0.0429,0.2502,0.04],"17":[0.5,0.1452,0.0417,0.25,0.032],"21":[0.7258,0.129,0.0417,0.2273,0.032],"19":[0.6774,0.0645,-0.02,0.1552,0.4565],"11":[0.629,0.0484,-0.0469,0.1389,0.6192],"9":[0.6935,0.0323,-0.0652,0.1429,0.8827],"23":[0.2903,0.0323,0.0,0.0811,0.5233],"0":[0.9355,0.0323,-0.08,0.125,0.8827],"1":[0.7419,0.0323,-0.0714,0.1304,0.8827],"29":[0.0645,0.0161,0.0,0.0556,0.8886],"22":[0.3871,0.0161,-0.0807,0.1061,0.9291],"31":[0.0161,0.0,-0.0455,0.0455,1.0],"5":[0.6613,0.0,-0.0625,0.0645,1.0],"27":[0.2581,0.0,-0.091,0.0909,1.0],"28":[0.1774,-0.0161,-0.1034,0.0658,0.9291],"30":[0.0806,-0.0161,-0.0527,0.0,0.8886],"14":[0.2742,-0.0161,-0.1053,0.0882,0.9291],"4":[0.7097,-0.0323,-0.1216,0.0556,0.8827],"7":[0.5645,-0.0484,-0.14,0.0357,0.6151],"3":[0.6935,-0.0484,-0.1071,0.0,0.2793],"15":[0.4516,-0.0484,-0.14,0.0435,0.6192],"26":[0.2419,-0.0484,-0.12,0.02,0.5],"16":[0.4839,-0.0645,-0.1458,0.0,0.3543],"10":[0.6774,-0.0645,-0.1389,0.0147,0.3543],"8":[0.629,-0.0645,-0.1429,0.0122,0.3543],"18":[0.2903,-0.0806,-0.1625,0.0,0.1824],"12":[0.6774,-0.0968,-0.1957,-0.0139,0.1636],"20":[0.5,-0.129,-0.2223,-0.0416,0.0373],"6":[0.5484,-0.1452,-0.25,-0.0455,0.04],"25":[0.2742,-0.1774,-0.2778,-0.0908,0.008]},"Gemma4-26B-A4B":{"21":[0.6129,0.1613,0.0806,0.25,0.0053],"24":[0.371,0.1452,0.0624,0.2424,0.0053],"25":[0.3387,0.0968,0.0167,0.1834,0.1813],"7":[0.6935,0.0645,0.0,0.1429,0.4729],"30":[0.0806,0.0645,0.0151,0.129,0.1813],"2":[0.9194,0.0645,0.0,0.1452,0.4729],"28":[0.2419,0.0484,-0.0312,0.1304,0.8053],"22":[0.3387,0.0484,-0.0357,0.1351,0.8053],"26":[0.2742,0.0323,-0.0577,0.125,0.8053],"12":[0.5968,0.0323,-0.0455,0.1094,0.8053],"10":[0.7903,0.0323,-0.0455,0.1129,0.8053],"27":[0.1774,0.0161,0.0,0.0572,0.8923],"31":[0.0323,0.0161,0.0,0.0517,0.8923],"4":[0.6613,0.0161,-0.0862,0.1286,0.9739],"23":[0.4677,0.0161,-0.06,0.0926,0.9368],"1":[0.9032,0.0,-0.0455,0.0455,1.0],"0":[1.0,0.0,0.0,0.0,1.0],"6":[0.629,-0.0161,-0.0893,0.0577,0.9368],"20":[0.5645,-0.0161,-0.0758,0.0385,0.9316],"8":[0.5161,-0.0323,-0.1094,0.0429,0.8053],"11":[0.5,-0.0323,-0.0976,0.0278,0.8053],"15":[0.629,-0.0323,-0.0968,0.0323,0.8053],"29":[0.0806,-0.0323,-0.1,0.0286,0.8053],"17":[0.4032,-0.0323,-0.125,0.0571,0.8053],"3":[0.6613,-0.0323,-0.0973,0.0333,0.8053],"14":[0.5,-0.0484,-0.1406,0.0536,0.8053],"13":[0.5,-0.0484,-0.1458,0.0469,0.8053],"19":[0.5484,-0.0484,-0.1216,0.0179,0.7488],"16":[0.5161,-0.0484,-0.1613,0.0834,0.8053],"5":[0.4032,-0.0806,-0.1667,0.0,0.3429],"9":[0.7903,-0.1129,-0.1912,-0.0417,0.032],"18":[0.2581,-0.2419,-0.3684,-0.1333,0.0053]},"Gemma4-31B":{"24":[0.4516,0.1935,0.1,0.3,0.008],"17":[0.4839,0.1452,0.0577,0.2424,0.008],"22":[0.7419,0.1452,0.0185,0.2857,0.1209],"19":[0.5,0.0968,0.0303,0.1667,0.008],"23":[0.1613,0.0806,0.0179,0.1538,0.0693],"29":[0.1774,0.0645,0.0128,0.1346,0.1472],"13":[0.4032,0.0484,-0.0517,0.1607,0.7911],"7":[0.629,0.0484,-0.0333,0.1352,0.6231],"5":[0.7097,0.0323,-0.0833,0.1486,0.9178],"16":[0.6613,0.0323,-0.0442,0.1137,0.8457],"18":[0.6452,0.0323,-0.0429,0.1154,0.8384],"12":[0.8226,0.0161,-0.0714,0.1143,1.0],"2":[0.9839,0.0161,0.0,0.0536,0.9659],"21":[0.3065,0.0161,-0.0536,0.087,0.9659],"1":[0.9355,0.0,0.0,0.0,1.0],"26":[0.1613,0.0,-0.0652,0.0645,1.0],"9":[0.5484,0.0,-0.0645,0.0658,1.0],"31":[0.0,0.0,0.0,0.0,1.0],"0":[0.9677,-0.0161,-0.0556,0.0,0.9659],"30":[0.0484,-0.0161,-0.0741,0.0357,0.9659],"27":[0.1935,-0.0161,-0.0572,0.0,0.9659],"14":[0.6129,-0.0484,-0.1316,0.0334,0.6231],"8":[0.7581,-0.0484,-0.129,0.0,0.5824],"11":[0.3226,-0.0484,-0.1705,0.0735,0.8202],"28":[0.0968,-0.0484,-0.1071,0.0,0.2634],"4":[0.5968,-0.0806,-0.1501,-0.0192,0.064],"3":[0.7258,-0.0806,-0.1774,0.0,0.2634],"10":[0.6129,-0.0806,-0.1731,0.0,0.2634],"15":[0.5323,-0.0806,-0.1786,0.0192,0.3543],"6":[0.5484,-0.0968,-0.1875,-0.0192,0.088],"20":[0.3871,-0.129,-0.2392,-0.0323,0.0777],"25":[0.2742,-0.1774,-0.2895,-0.0781,0.008]},"Qwen3.5-27B":{"21":[0.4839,0.1452,0.0323,0.2593,0.456],"24":[0.6129,0.1129,0.0139,0.2308,0.456],"1":[0.8387,0.0968,-0.0371,0.2286,0.63],"22":[0.5161,0.0968,-0.0417,0.2237,0.63],"14":[0.5323,0.0806,-0.0536,0.2292,0.63],"7":[0.7742,0.0806,-0.0652,0.2353,0.6475],"2":[0.8226,0.0645,-0.0312,0.1667,0.63],"23":[0.5161,0.0645,-0.091,0.2188,0.752],"31":[0.0968,0.0645,0.0143,0.1296,0.456],"30":[0.1613,0.0645,-0.04,0.1731,0.63],"9":[0.8387,0.0323,-0.1035,0.1667,0.8537],"27":[0.3226,0.0323,-0.12,0.1819,0.8537],"28":[0.3387,0.0323,-0.1154,0.1786,0.8537],"0":[0.7742,0.0323,-0.0962,0.16,0.8537],"6":[0.5484,0.0161,-0.0862,0.125,0.8619],"10":[0.5968,0.0,-0.1471,0.1448,1.0],"20":[0.4194,-0.0161,-0.1486,0.1137,0.8619],"5":[0.629,-0.0323,-0.197,0.1352,0.8563],"11":[0.6129,-0.0323,-0.1538,0.0806,0.8537],"29":[0.0806,-0.0323,-0.1034,0.0278,0.7343],"26":[0.3226,-0.0323,-0.1667,0.1034,0.8537],"17":[0.4677,-0.0323,-0.1579,0.1,0.8537],"18":[0.1452,-0.0484,-0.1731,0.079,0.7878],"15":[0.5968,-0.0645,-0.1613,0.0357,0.63],"16":[0.3871,-0.0645,-0.1667,0.0323,0.63],"13":[0.4194,-0.0806,-0.25,0.0807,0.6791],"12":[0.8065,-0.0806,-0.1974,0.0286,0.63],"8":[0.5323,-0.0806,-0.2069,0.0484,0.63],"4":[0.629,-0.0806,-0.2115,0.05,0.63],"3":[0.5161,-0.0968,-0.2433,0.0406,0.63],"25":[0.2097,-0.1129,-0.2273,0.0,0.456],"19":[0.4516,-0.129,-0.28,0.0208,0.63]},"Qwen3.5-35B-A3B":{}},"object":{"Gemma3-4B":{"16":[0.9194,0.2903,0.175,0.4108,0.004],"9":[0.7097,0.2097,0.1034,0.3108,0.0064],"7":[0.9032,0.1935,0.1087,0.2833,0.004],"25":[0.4032,0.1774,0.0714,0.303,0.0091],"12":[0.3548,0.129,0.0435,0.2222,0.016],"29":[0.2258,0.129,0.0577,0.2106,0.0091],"22":[0.4839,0.1129,0.0417,0.1905,0.012],"18":[0.7097,0.0968,0.0156,0.1875,0.072],"20":[0.4194,0.0806,0.0,0.1618,0.1429],"27":[0.4516,0.0806,0.0,0.1667,0.1429],"21":[0.4839,0.0161,-0.0682,0.1,0.9404],"2":[0.5,0.0161,-0.0556,0.0893,0.9203],"0":[0.8226,0.0,-0.075,0.0806,1.0],"8":[0.7258,-0.0161,-0.1515,0.1094,0.9404],"24":[0.2903,-0.0323,-0.125,0.0513,0.6744],"13":[0.8548,-0.0323,-0.1,0.0263,0.5696],"31":[0.0968,-0.0323,-0.1177,0.0556,0.6766],"19":[0.4677,-0.0323,-0.1129,0.0435,0.6523],"15":[0.4839,-0.0484,-0.1459,0.0455,0.556],"30":[0.0806,-0.0484,-0.1167,0.0179,0.3576],"11":[0.4516,-0.0484,-0.1212,0.0179,0.3244],"10":[0.7258,-0.0645,-0.1429,0.0,0.1937],"17":[0.4516,-0.0806,-0.1912,0.0278,0.3215],"6":[0.6452,-0.0806,-0.1833,0.0303,0.272],"28":[0.3387,-0.0806,-0.1731,0.0,0.1937],"5":[0.7097,-0.0968,-0.2105,0.0,0.172],"14":[0.4194,-0.0968,-0.2143,0.0161,0.1937],"1":[0.5484,-0.129,-0.2424,-0.0172,0.0812],"4":[0.4355,-0.129,-0.2222,-0.04,0.0175],"23":[0.2581,-0.1452,-0.2407,-0.0484,0.016],"26":[0.2097,-0.1613,-0.2647,-0.0735,0.004],"3":[0.4194,-0.1774,-0.2778,-0.0875,0.004]},"Gemma3-12B":{"20":[0.7581,0.2419,0.1379,0.353,0.002],"12":[0.5,0.2097,0.1167,0.3104,0.002],"7":[0.7903,0.1935,0.0833,0.3226,0.002],"29":[0.2097,0.1774,0.0789,0.2931,0.002],"2":[0.7419,0.1774,0.0926,0.2614,0.002],"16":[0.6774,0.129,0.0536,0.2143,0.002],"24":[0.2419,0.129,0.0417,0.2258,0.0096],"1":[0.7097,0.0806,0.0,0.1667,0.1846],"10":[0.629,0.0484,-0.0715,0.1667,0.8611],"8":[0.5645,0.0323,-0.0676,0.1346,0.9085],"13":[0.6452,0.0323,-0.0556,0.1212,0.8611],"31":[0.0323,0.0161,-0.037,0.0735,1.0],"19":[0.4516,0.0161,-0.0781,0.1111,1.0],"17":[0.6129,0.0161,-0.0758,0.1111,1.0],"11":[0.8548,0.0,-0.1,0.1,1.0],"21":[0.5161,0.0,-0.087,0.0909,1.0],"9":[0.5161,0.0,-0.1001,0.1034,1.0],"22":[0.2097,0.0,-0.0758,0.0806,1.0],"5":[0.5,-0.0161,-0.125,0.0862,1.0],"25":[0.4032,-0.0161,-0.1112,0.0833,1.0],"0":[0.871,-0.0323,-0.1207,0.0527,0.8611],"6":[0.8065,-0.0484,-0.1731,0.069,0.7528],"28":[0.2097,-0.0645,-0.1724,0.0625,0.6436],"30":[0.0645,-0.0645,-0.1447,0.0,0.288],"27":[0.1935,-0.0806,-0.1964,0.0,0.288],"23":[0.2742,-0.0806,-0.1957,0.0484,0.4424],"3":[0.7742,-0.0806,-0.1622,0.0,0.1846],"15":[0.5161,-0.0806,-0.2084,0.0345,0.4424],"4":[0.6935,-0.129,-0.2778,0.0,0.1846],"18":[0.5484,-0.1452,-0.2273,-0.0682,0.0036],"14":[0.4194,-0.2581,-0.3542,-0.16,0.002],"26":[0.0645,-0.4032,-0.5128,-0.3,0.002]},"Gemma3-27B":{"12":[0.8065,0.1774,0.0714,0.2833,0.0064],"1":[0.9355,0.1613,0.0714,0.26,0.0064],"2":[0.9194,0.129,0.0278,0.2434,0.096],"9":[0.6452,0.0968,0.0,0.1923,0.2048],"10":[0.5323,0.0968,0.0152,0.1806,0.1422],"29":[0.0968,0.0645,0.0,0.1539,0.2647],"4":[0.7581,0.0645,-0.0536,0.1875,0.6475],"16":[0.6774,0.0645,-0.0435,0.1731,0.586],"15":[0.3226,0.0484,-0.0556,0.1562,0.6778],"20":[0.2903,0.0484,-0.0167,0.12,0.5056],"21":[0.2903,0.0484,-0.0385,0.1471,0.6778],"8":[0.7903,0.0484,-0.0536,0.1538,0.6778],"22":[0.4194,0.0323,-0.037,0.1167,0.7565],"18":[0.4355,0.0323,-0.0442,0.1082,0.7263],"0":[1.0,0.0323,0.0,0.0834,0.5056],"23":[0.2419,0.0161,0.0,0.0536,0.8171],"25":[0.2581,0.0161,-0.0385,0.0741,0.8171],"27":[0.2742,0.0161,-0.0556,0.1176,0.9094],"11":[0.629,0.0,-0.0833,0.0769,1.0],"31":[0.0,-0.0161,-0.0517,0.0,0.8171],"30":[0.0484,-0.0161,-0.0556,0.0,0.8171],"17":[0.6129,-0.0323,-0.1346,0.0714,0.7717],"19":[0.2903,-0.0323,-0.1,0.0294,0.6778],"6":[0.7097,-0.0484,-0.1515,0.05,0.6778],"7":[0.6935,-0.0484,-0.1875,0.0862,0.7533],"24":[0.5645,-0.0645,-0.1429,0.0,0.2806],"26":[0.0645,-0.0645,-0.1515,0.0,0.2667],"13":[0.7097,-0.129,-0.2083,-0.0556,0.0053],"28":[0.371,-0.1613,-0.2609,-0.0577,0.0183],"14":[0.2258,-0.1774,-0.3,-0.075,0.0053],"5":[0.7742,-0.1774,-0.3104,-0.06,0.016],"3":[0.6129,-0.2258,-0.35,-0.1129,0.0053]},"Gemma4-E4B":{"7":[0.9516,0.2258,0.129,0.3333,0.008],"2":[0.7903,0.1935,0.0667,0.3182,0.032],"21":[0.3871,0.1613,0.0555,0.2778,0.032],"16":[0.4194,0.129,0.0322,0.24,0.048],"29":[0.2742,0.129,0.0111,0.25,0.1189],"19":[0.4839,0.1129,0.0152,0.2115,0.1173],"12":[0.9355,0.1129,0.0208,0.2051,0.0604],"9":[0.7258,0.0968,-0.0366,0.2392,0.2928],"15":[0.4839,0.0968,-0.0147,0.22,0.2055],"20":[0.4677,0.0968,-0.0147,0.2167,0.2055],"28":[0.1613,0.0484,-0.0179,0.1212,0.3476],"24":[0.3548,0.0323,-0.0429,0.1143,0.6375],"3":[0.6935,0.0161,-0.0806,0.1111,0.91],"31":[0.129,0.0161,-0.0833,0.1072,0.91],"5":[0.9032,0.0161,-0.0667,0.1,0.91],"23":[0.4194,-0.0161,-0.125,0.0921,0.91],"4":[0.6452,-0.0323,-0.125,0.0625,0.7194],"26":[0.2742,-0.0323,-0.1515,0.0857,0.8331],"1":[0.5806,-0.0484,-0.1607,0.0652,0.616],"8":[0.5,-0.0484,-0.1668,0.0577,0.6349],"27":[0.371,-0.0484,-0.1071,0.0,0.2055],"25":[0.3387,-0.0645,-0.1522,0.0256,0.3476],"0":[0.9032,-0.0645,-0.1333,-0.0152,0.1076],"10":[0.5,-0.0645,-0.1897,0.0556,0.5009],"13":[0.5806,-0.0968,-0.197,0.0147,0.2055],"22":[0.1129,-0.0968,-0.2,0.0,0.1189],"18":[0.3387,-0.0968,-0.2046,0.0132,0.2055],"30":[0.0161,-0.1129,-0.2083,-0.0357,0.032],"14":[0.6774,-0.129,-0.2414,-0.0185,0.0736],"17":[0.4516,-0.1774,-0.3036,-0.06,0.032],"6":[0.4516,-0.1774,-0.3036,-0.0577,0.032],"11":[0.6774,-0.1774,-0.2718,-0.0789,0.008]},"Gemma4-12B":{"15":[0.6452,0.1452,0.0249,0.2727,0.088],"9":[0.8065,0.1452,0.05,0.2586,0.0512],"2":[0.8871,0.129,0.0556,0.2069,0.0053],"14":[0.4194,0.129,0.027,0.2424,0.088],"20":[0.7097,0.0806,-0.025,0.1957,0.4224],"12":[0.8387,0.0645,-0.0185,0.15,0.4224],"21":[0.6613,0.0645,-0.0217,0.1528,0.4224],"23":[0.3065,0.0484,-0.0484,0.1429,0.7136],"29":[0.0968,0.0484,0.0,0.1072,0.2065],"8":[0.7419,0.0484,-0.037,0.1389,0.69],"0":[0.9355,0.0323,-0.0313,0.0972,0.7136],"4":[0.7742,0.0323,-0.0667,0.1346,0.9585],"19":[0.629,0.0161,-0.077,0.1111,0.9887],"13":[0.5484,0.0161,-0.0769,0.1129,0.9887],"7":[0.629,0.0161,-0.0588,0.087,0.9887],"11":[0.5806,0.0,-0.0441,0.0455,1.0],"1":[0.7097,0.0,-0.0625,0.0625,1.0],"16":[0.5484,0.0,-0.1087,0.0953,1.0],"27":[0.2419,-0.0161,-0.0893,0.0577,0.9887],"18":[0.3548,-0.0161,-0.0893,0.0556,0.9887],"22":[0.3548,-0.0161,-0.1061,0.0625,0.9887],"31":[0.0,-0.0161,-0.0517,0.0,0.9887],"30":[0.0645,-0.0323,-0.1,0.0278,0.7136],"26":[0.2581,-0.0323,-0.1296,0.0682,0.976],"24":[0.2581,-0.0484,-0.1406,0.0469,0.7136],"25":[0.371,-0.0806,-0.1936,0.0334,0.4224],"10":[0.6452,-0.0968,-0.197,0.0,0.176],"6":[0.5806,-0.1129,-0.2188,-0.0161,0.1102],"3":[0.629,-0.1129,-0.1857,-0.0468,0.0053],"28":[0.0645,-0.129,-0.2143,-0.0517,0.0053],"5":[0.5161,-0.1452,-0.2667,-0.0357,0.0693],"17":[0.1935,-0.1613,-0.2564,-0.0686,0.024]},"Gemma4-26B-A4B":{"23":[0.7419,0.2903,0.1818,0.4062,0.0053],"12":[0.7419,0.1774,0.0625,0.2942,0.016],"21":[0.5806,0.129,0.025,0.2391,0.1024],"29":[0.2419,0.129,0.0556,0.2083,0.0053],"2":[0.9355,0.0806,0.0217,0.1515,0.0503],"9":[0.9677,0.0645,0.0139,0.1286,0.1193],"22":[0.3548,0.0645,-0.0417,0.1818,0.5009],"13":[0.5968,0.0484,-0.04,0.1528,0.552],"15":[0.7097,0.0484,-0.04,0.1316,0.5009],"27":[0.2097,0.0484,-0.0286,0.14,0.5009],"24":[0.2742,0.0484,-0.0345,0.1346,0.5009],"30":[0.0484,0.0323,0.0,0.0806,0.5009],"6":[0.6774,0.0323,-0.0527,0.1207,0.7398],"17":[0.4677,0.0323,-0.1072,0.1714,0.8103],"20":[0.6129,0.0323,-0.0682,0.1286,0.7778],"25":[0.2581,0.0161,-0.0694,0.1029,0.8864],"10":[0.7742,0.0161,-0.0968,0.125,0.8864],"31":[0.0161,0.0,0.0,0.0,1.0],"5":[0.4677,-0.0161,-0.1286,0.0893,0.9063],"4":[0.6129,-0.0323,-0.1481,0.1035,0.8103],"0":[0.9677,-0.0323,-0.0862,0.0,0.5009],"7":[0.5806,-0.0484,-0.1334,0.0334,0.5009],"8":[0.5,-0.0484,-0.1324,0.037,0.5009],"1":[0.8548,-0.0484,-0.1207,0.0179,0.5009],"26":[0.1935,-0.0484,-0.1216,0.0179,0.5009],"11":[0.4516,-0.0806,-0.1667,0.0,0.1723],"28":[0.0806,-0.1129,-0.1912,-0.0416,0.016],"3":[0.5806,-0.1129,-0.2,-0.0278,0.068],"18":[0.371,-0.129,-0.2581,0.0,0.1627],"16":[0.4355,-0.129,-0.2392,-0.0185,0.1024],"14":[0.3548,-0.1935,-0.3001,-0.0833,0.016],"19":[0.3387,-0.2581,-0.371,-0.15,0.0053]},"Gemma4-31B":{"23":[0.4194,0.3387,0.2206,0.4655,0.004],"9":[0.8065,0.2581,0.1429,0.375,0.004],"21":[0.4839,0.1935,0.0577,0.3382,0.032],"16":[0.7581,0.129,0.0172,0.2322,0.1138],"6":[0.7258,0.0806,-0.0435,0.2084,0.5874],"10":[0.7581,0.0645,-0.02,0.1528,0.5292],"29":[0.1613,0.0484,-0.0357,0.1333,0.686],"15":[0.6613,0.0484,-0.069,0.1765,0.9568],"4":[0.6935,0.0161,-0.1023,0.1286,0.9568],"31":[0.0161,0.0161,0.0,0.0536,0.9568],"25":[0.4677,0.0161,-0.0973,0.1304,0.9568],"28":[0.1613,0.0161,-0.0556,0.0862,0.9568],"0":[0.9839,0.0,0.0,0.0,1.0],"2":[0.9677,0.0,-0.0469,0.0469,1.0],"12":[0.7903,-0.0161,-0.1061,0.0625,0.9568],"11":[0.3548,-0.0161,-0.0893,0.0541,0.9568],"26":[0.1452,-0.0161,-0.0758,0.04,0.9568],"1":[0.9194,-0.0161,-0.0541,0.0,0.9568],"30":[0.0484,-0.0161,-0.0556,0.0,0.9568],"27":[0.1935,-0.0161,-0.1072,0.0626,0.9568],"20":[0.4839,-0.0323,-0.125,0.0588,0.9568],"18":[0.5806,-0.0323,-0.1346,0.0676,0.9568],"13":[0.3226,-0.0323,-0.1364,0.0625,0.9568],"24":[0.1935,-0.0645,-0.14,0.0128,0.36],"22":[0.5323,-0.0645,-0.1724,0.0455,0.6208],"3":[0.7097,-0.0968,-0.1731,-0.0312,0.0128],"19":[0.3065,-0.0968,-0.2059,0.0,0.224],"17":[0.2419,-0.0968,-0.1852,-0.0147,0.1248],"5":[0.5484,-0.129,-0.2286,-0.0476,0.004],"8":[0.6774,-0.129,-0.25,-0.0217,0.084],"14":[0.4839,-0.1774,-0.2742,-0.0909,0.004],"7":[0.4032,-0.1774,-0.2833,-0.0689,0.0213]},"Qwen3.5-27B":{"21":[0.5645,0.2258,0.0897,0.3696,0.0384],"25":[0.5161,0.1935,0.04,0.3415,0.084],"18":[0.371,0.1774,0.0385,0.3214,0.0823],"20":[0.5968,0.1613,0.0185,0.3065,0.1422],"0":[0.9032,0.1613,0.0468,0.2857,0.0533],"22":[0.5484,0.129,-0.0287,0.2692,0.2697],"16":[0.5645,0.1129,-0.0003,0.24,0.2697],"29":[0.2097,0.0968,0.0,0.197,0.224],"27":[0.3548,0.0645,-0.0862,0.2,0.6944],"1":[0.7903,0.0484,-0.0857,0.197,0.768],"2":[0.8065,0.0484,-0.0962,0.1897,0.768],"10":[0.6452,0.0484,-0.0968,0.1751,0.768],"9":[0.8387,0.0323,-0.0758,0.1482,0.9216],"31":[0.0484,0.0161,-0.037,0.0715,0.9994],"23":[0.4677,0.0161,-0.15,0.1819,1.0],"6":[0.5484,0.0161,-0.1251,0.1618,1.0],"7":[0.6935,0.0,-0.1481,0.15,1.0],"30":[0.0968,0.0,-0.0946,0.0882,1.0],"24":[0.5,0.0,-0.1731,0.1667,1.0],"4":[0.6935,-0.0161,-0.1724,0.1411,1.0],"3":[0.5645,-0.0484,-0.175,0.0834,0.768],"11":[0.5806,-0.0645,-0.1719,0.0429,0.4851],"12":[0.8226,-0.0645,-0.1858,0.04,0.4851],"15":[0.5645,-0.0968,-0.2308,0.0323,0.3819],"8":[0.5161,-0.0968,-0.2392,0.0476,0.4851],"17":[0.4032,-0.0968,-0.2581,0.0626,0.4851],"13":[0.4032,-0.0968,-0.2143,0.0152,0.2697],"5":[0.5323,-0.129,-0.2857,0.0185,0.2697],"26":[0.2258,-0.129,-0.2258,-0.04,0.032],"28":[0.129,-0.1774,-0.2895,-0.0682,0.0213],"14":[0.1935,-0.2581,-0.3875,-0.1296,0.016],"19":[0.3065,-0.2742,-0.4032,-0.1406,0.016]},"Qwen3.5-35B-A3B":{"12":[0.871,0.2903,0.1795,0.4074,0.016],"22":[0.6935,0.2742,0.1,0.4512,0.016],"20":[0.5645,0.1613,0.0263,0.2942,0.112],"9":[0.8226,0.1452,-0.0179,0.3143,0.3591],"21":[0.6452,0.1452,-0.0167,0.2955,0.352],"2":[0.8226,0.1129,-0.0435,0.2609,0.5062],"1":[0.6935,0.0968,-0.0455,0.2386,0.6213],"3":[0.6452,0.0645,-0.0968,0.2242,0.8623],"0":[0.9677,0.0484,-0.0334,0.129,0.754],"24":[0.3871,0.0484,-0.1552,0.24,0.9178],"18":[0.4839,0.0484,-0.1072,0.2097,0.864],"25":[0.2742,0.0484,-0.125,0.2093,0.864],"5":[0.5484,0.0323,-0.1667,0.2344,0.9493],"10":[0.5484,0.0161,-0.1389,0.1765,0.9683],"15":[0.629,0.0,-0.1719,0.1834,1.0],"27":[0.3871,-0.0161,-0.1334,0.1,0.9677],"31":[0.0645,-0.0161,-0.1034,0.0682,0.9677],"16":[0.2742,-0.0161,-0.1786,0.1539,0.9683],"6":[0.5645,-0.0323,-0.2084,0.1447,0.9493],"7":[0.629,-0.0484,-0.1964,0.1061,0.864],"17":[0.4677,-0.0484,-0.2188,0.1379,0.8853],"8":[0.5484,-0.0484,-0.1739,0.0714,0.8623],"13":[0.5161,-0.0484,-0.1857,0.0833,0.864],"11":[0.5645,-0.0645,-0.2369,0.1042,0.8623],"30":[0.1935,-0.0645,-0.1829,0.0607,0.754],"29":[0.3065,-0.0806,-0.2222,0.0645,0.7177],"28":[0.2097,-0.0968,-0.225,0.0345,0.5062],"19":[0.3226,-0.0968,-0.2581,0.0652,0.6843],"26":[0.2258,-0.1613,-0.2692,-0.0555,0.056],"23":[0.371,-0.1935,-0.3667,-0.0143,0.224],"4":[0.4839,-0.2419,-0.4348,-0.0556,0.0896],"14":[0.2742,-0.2581,-0.4243,-0.0781,0.056]}},"subject":{"Gemma3-4B":{"12":[0.371,0.1452,0.069,0.2297,0.008],"25":[0.371,0.1452,0.0577,0.25,0.008],"20":[0.4355,0.0968,0.0323,0.1667,0.0256],"16":[0.7258,0.0968,0.0,0.1923,0.192],"9":[0.5968,0.0968,0.0185,0.1852,0.056],"31":[0.2097,0.0806,0.0192,0.15,0.0549],"24":[0.3871,0.0645,0.0,0.1429,0.3131],"27":[0.4194,0.0484,-0.0172,0.1191,0.4729],"5":[0.8387,0.0323,0.0,0.0806,0.4729],"23":[0.4355,0.0323,-0.0442,0.1087,0.7613],"29":[0.129,0.0323,-0.0278,0.0962,0.6647],"30":[0.1452,0.0161,0.0,0.0536,0.8928],"18":[0.629,0.0161,-0.0517,0.0897,0.8928],"22":[0.3871,0.0161,-0.0556,0.0926,0.8928],"2":[0.5,0.0161,0.0,0.0536,0.8928],"28":[0.4355,0.0161,-0.04,0.0714,0.8928],"19":[0.5161,0.0161,0.0,0.0556,0.8928],"4":[0.5645,0.0,-0.0625,0.0625,1.0],"10":[0.7903,0.0,-0.069,0.0582,1.0],"15":[0.5,-0.0323,-0.0962,0.0278,0.6647],"13":[0.8548,-0.0323,-0.0807,0.0,0.4729],"1":[0.6452,-0.0323,-0.125,0.0556,0.7613],"21":[0.4194,-0.0484,-0.1324,0.0345,0.5456],"14":[0.4677,-0.0484,-0.125,0.0185,0.4729],"7":[0.6613,-0.0484,-0.1333,0.0385,0.5456],"11":[0.4355,-0.0645,-0.1286,-0.0152,0.096],"0":[0.7581,-0.0645,-0.1296,-0.0147,0.1024],"26":[0.2903,-0.0806,-0.1757,0.0,0.2535],"3":[0.5161,-0.0806,-0.1522,-0.0192,0.0427],"17":[0.4194,-0.1129,-0.2381,0.0152,0.2535],"8":[0.6129,-0.129,-0.2122,-0.0536,0.0107],"6":[0.5323,-0.1935,-0.2917,-0.0909,0.016]},"Gemma3-12B":{"5":[0.7903,0.2742,0.1667,0.3966,0.008],"29":[0.129,0.0968,0.0323,0.1739,0.04],"9":[0.5968,0.0806,-0.0345,0.1892,0.5166],"8":[0.6129,0.0806,0.0185,0.1515,0.0704],"25":[0.4839,0.0645,-0.0167,0.1607,0.4702],"19":[0.5,0.0645,0.0,0.1429,0.352],"10":[0.6452,0.0645,-0.0653,0.1834,0.704],"16":[0.5968,0.0484,-0.04,0.1552,0.704],"24":[0.1613,0.0484,-0.0179,0.125,0.5525],"2":[0.6129,0.0484,-0.0385,0.1324,0.704],"12":[0.3387,0.0484,0.0,0.1053,0.2938],"27":[0.3065,0.0323,-0.0455,0.1154,0.8077],"31":[0.0484,0.0323,-0.0286,0.0952,0.704],"13":[0.629,0.0161,-0.0527,0.0862,0.9451],"20":[0.5323,0.0161,-0.069,0.1,0.9451],"1":[0.629,0.0,-0.0652,0.0652,1.0],"23":[0.3548,0.0,-0.1154,0.1129,1.0],"15":[0.5968,0.0,-0.1042,0.1029,1.0],"7":[0.5806,-0.0161,-0.1154,0.0811,0.9854],"30":[0.1129,-0.0161,-0.0909,0.0541,0.9451],"28":[0.2419,-0.0323,-0.0926,0.0323,0.704],"21":[0.4839,-0.0323,-0.1191,0.0556,0.8077],"17":[0.5645,-0.0323,-0.1316,0.0694,0.8077],"22":[0.1774,-0.0323,-0.1094,0.0442,0.7782],"6":[0.8065,-0.0484,-0.1613,0.069,0.704],"14":[0.5806,-0.0968,-0.2059,0.0,0.2938],"26":[0.371,-0.0968,-0.2121,0.0,0.2938],"3":[0.7581,-0.0968,-0.2027,0.0,0.2938],"0":[0.7903,-0.1129,-0.2031,-0.0286,0.08],"11":[0.7258,-0.129,-0.2354,-0.0172,0.1646],"18":[0.5645,-0.129,-0.2292,-0.0455,0.0213],"4":[0.6774,-0.1452,-0.2414,-0.06,0.008]},"Gemma3-27B":{"21":[0.3871,0.1452,0.0571,0.25,0.0107],"1":[0.9032,0.129,0.0535,0.2045,0.0064],"2":[0.9032,0.1129,0.0345,0.2031,0.0053],"9":[0.629,0.0806,0.0,0.1774,0.3695],"12":[0.6935,0.0645,-0.0192,0.1471,0.544],"20":[0.3065,0.0645,0.0,0.1429,0.3695],"22":[0.4355,0.0484,0.0,0.1094,0.3413],"16":[0.6613,0.0484,-0.04,0.1481,0.6255],"14":[0.4355,0.0323,-0.06,0.1177,0.796],"27":[0.2903,0.0323,-0.0294,0.1029,0.6255],"15":[0.3065,0.0323,-0.06,0.1154,0.796],"31":[0.0484,0.0323,0.0,0.0833,0.548],"23":[0.2581,0.0323,-0.0303,0.1,0.6255],"10":[0.4677,0.0323,-0.0278,0.1035,0.6255],"0":[0.9839,0.0161,0.0,0.0556,0.896],"13":[0.8387,0.0,-0.0926,0.0909,1.0],"29":[0.0323,0.0,0.0,0.0,1.0],"26":[0.129,0.0,-0.0625,0.0645,1.0],"24":[0.629,0.0,-0.0806,0.0769,1.0],"8":[0.7258,-0.0161,-0.1029,0.0645,0.9737],"7":[0.7258,-0.0161,-0.0741,0.0357,0.9363],"25":[0.2258,-0.0161,-0.0714,0.0357,0.9363],"18":[0.371,-0.0323,-0.0833,0.0,0.544],"30":[0.0323,-0.0323,-0.0833,0.0,0.548],"17":[0.5968,-0.0484,-0.1304,0.0313,0.608],"4":[0.6452,-0.0484,-0.1458,0.0484,0.6255],"5":[0.9032,-0.0484,-0.1212,0.0185,0.544],"6":[0.6774,-0.0806,-0.1515,-0.0192,0.052],"28":[0.4194,-0.1129,-0.1905,-0.0405,0.0229],"19":[0.2097,-0.1129,-0.1875,-0.0441,0.0064],"11":[0.4677,-0.1613,-0.25,-0.08,0.0053],"3":[0.6613,-0.1774,-0.2879,-0.0851,0.0053]},"Gemma4-E4B":{"15":[0.5484,0.1613,0.0535,0.275,0.096],"27":[0.5,0.0806,0.0,0.1786,0.444],"16":[0.371,0.0806,-0.0135,0.1724,0.444],"19":[0.4516,0.0806,0.0,0.1618,0.3467],"28":[0.1774,0.0645,0.0143,0.1316,0.312],"25":[0.4355,0.0323,-0.0441,0.1111,0.9856],"18":[0.4677,0.0323,-0.0435,0.1137,0.9856],"20":[0.4032,0.0323,-0.0625,0.1375,0.9856],"26":[0.3387,0.0323,-0.0556,0.125,0.9856],"3":[0.6935,0.0161,-0.0811,0.1111,1.0],"4":[0.6935,0.0161,-0.0833,0.1094,1.0],"30":[0.1452,0.0161,-0.0405,0.0741,1.0],"2":[0.6129,0.0161,-0.08,0.1111,1.0],"24":[0.3387,0.0161,-0.0536,0.091,1.0],"23":[0.4355,0.0,-0.1137,0.1072,1.0],"0":[0.9677,0.0,-0.0441,0.0455,1.0],"21":[0.2258,0.0,-0.1154,0.1112,1.0],"7":[0.7258,0.0,-0.1094,0.1129,1.0],"31":[0.1129,0.0,-0.08,0.0833,1.0],"5":[0.871,-0.0161,-0.1034,0.0714,1.0],"29":[0.129,-0.0161,-0.1,0.08,1.0],"8":[0.5161,-0.0323,-0.0962,0.0238,0.9856],"1":[0.5968,-0.0323,-0.1286,0.0571,0.9856],"14":[0.7742,-0.0323,-0.1346,0.0645,0.9856],"9":[0.5806,-0.0484,-0.1364,0.0323,0.936],"12":[0.7742,-0.0484,-0.119,0.0185,0.6912],"10":[0.5161,-0.0484,-0.1452,0.0469,0.9674],"13":[0.6129,-0.0645,-0.1522,0.02,0.6912],"11":[0.7903,-0.0645,-0.1619,0.0323,0.7447],"22":[0.129,-0.0806,-0.1667,-0.0151,0.312],"6":[0.5323,-0.0968,-0.18,-0.0167,0.312],"17":[0.5323,-0.0968,-0.1875,0.0,0.3467]},"Gemma4-12B":{"13":[0.5968,0.0645,-0.0139,0.14,0.5049],"9":[0.7258,0.0645,0.0139,0.1324,0.36],"25":[0.5161,0.0645,-0.0371,0.1619,0.6315],"18":[0.4355,0.0645,0.0,0.1429,0.496],"28":[0.2419,0.0484,0.0,0.1053,0.496],"23":[0.3065,0.0484,0.0,0.1053,0.496],"27":[0.3065,0.0484,-0.0333,0.1364,0.672],"17":[0.4032,0.0484,-0.0345,0.1304,0.662],"26":[0.3226,0.0323,-0.0442,0.1061,0.8876],"15":[0.5323,0.0323,-0.0741,0.1389,0.9844],"19":[0.6452,0.0323,-0.0294,0.0962,0.7804],"20":[0.6452,0.0161,-0.0834,0.1163,0.9887],"21":[0.6129,0.0161,-0.0556,0.0833,0.9887],"22":[0.3871,0.0161,-0.075,0.1034,0.9887],"29":[0.0484,0.0,-0.0435,0.0455,1.0],"31":[0.0161,0.0,-0.0455,0.0455,1.0],"30":[0.0968,0.0,0.0,0.0,1.0],"16":[0.5323,-0.0161,-0.0714,0.0357,0.9887],"3":[0.7258,-0.0161,-0.075,0.037,0.9887],"24":[0.2903,-0.0161,-0.0714,0.04,0.9887],"14":[0.2742,-0.0161,-0.1111,0.0833,0.9887],"8":[0.6774,-0.0161,-0.0714,0.0406,0.9887],"5":[0.629,-0.0323,-0.1389,0.0778,0.9844],"10":[0.7097,-0.0323,-0.0833,0.0,0.6315],"6":[0.6613,-0.0323,-0.0833,0.0,0.6315],"11":[0.5484,-0.0323,-0.0833,0.0,0.6315],"7":[0.5645,-0.0484,-0.1184,0.0179,0.6315],"2":[0.7097,-0.0484,-0.1053,0.0,0.496],"1":[0.6613,-0.0484,-0.1207,0.0208,0.6315],"0":[0.8387,-0.0645,-0.1324,-0.0147,0.36],"12":[0.7097,-0.0645,-0.129,-0.0147,0.36],"4":[0.629,-0.1129,-0.1923,-0.0394,0.064]},"Gemma4-26B-A4B":{"23":[0.5968,0.1452,0.0172,0.2656,0.336],"21":[0.5645,0.1129,0.0156,0.2125,0.336],"5":[0.5484,0.0645,-0.0185,0.1667,0.6791],"7":[0.6774,0.0484,0.0,0.1111,0.416],"11":[0.5645,0.0323,-0.0323,0.0972,1.0],"9":[0.9355,0.0323,0.0,0.0862,0.736],"25":[0.2742,0.0323,-0.0417,0.1129,1.0],"13":[0.5645,0.0161,-0.0715,0.103,1.0],"28":[0.2097,0.0161,-0.0714,0.1,1.0],"24":[0.2419,0.0161,-0.0556,0.0909,1.0],"31":[0.0323,0.0161,0.0,0.0517,1.0],"30":[0.0323,0.0161,0.0,0.0556,1.0],"2":[0.871,0.0161,-0.0517,0.0926,1.0],"1":[0.9194,0.0161,0.0,0.0536,1.0],"4":[0.6613,0.0161,-0.0834,0.1305,1.0],"17":[0.4516,0.0161,-0.0645,0.1053,1.0],"20":[0.5968,0.0161,-0.0385,0.0758,1.0],"8":[0.5484,0.0,-0.079,0.08,1.0],"19":[0.5968,0.0,-0.0455,0.0476,1.0],"29":[0.1129,0.0,0.0,0.0,1.0],"27":[0.1452,-0.0161,-0.0572,0.0,1.0],"0":[0.9839,-0.0161,-0.0571,0.0,1.0],"26":[0.2258,-0.0161,-0.1137,0.0811,1.0],"12":[0.5484,-0.0161,-0.0921,0.0556,1.0],"15":[0.629,-0.0323,-0.0833,0.0,0.736],"14":[0.5,-0.0484,-0.12,0.0185,0.736],"22":[0.2419,-0.0484,-0.1087,0.0,0.416],"16":[0.5161,-0.0484,-0.1379,0.0536,1.0],"6":[0.5806,-0.0645,-0.1481,0.0,0.464],"10":[0.6774,-0.0806,-0.15,-0.0192,0.224],"3":[0.5806,-0.1129,-0.1923,-0.0435,0.096],"18":[0.371,-0.129,-0.2609,0.0,0.352]},"Gemma4-31B":{"23":[0.1935,0.1129,0.0185,0.2175,0.128],"21":[0.4032,0.1129,0.0179,0.2188,0.128],"25":[0.5323,0.0806,0.0185,0.1515,0.104],"15":[0.6774,0.0645,0.0,0.1459,0.3084],"4":[0.7258,0.0484,0.0,0.1061,0.3084],"19":[0.4516,0.0484,0.0,0.1042,0.3084],"24":[0.2903,0.0323,-0.0286,0.1,0.7714],"22":[0.629,0.0323,0.0,0.08,0.5824],"20":[0.5484,0.0323,-0.0313,0.0968,0.7714],"16":[0.6613,0.0323,0.0,0.0833,0.594],"0":[1.0,0.0161,0.0,0.0556,1.0],"7":[0.5968,0.0161,-0.037,0.0714,1.0],"18":[0.6129,0.0,-0.0667,0.0645,1.0],"1":[0.9355,0.0,0.0,0.0,1.0],"6":[0.6452,0.0,-0.0857,0.0667,1.0],"5":[0.6774,0.0,-0.0769,0.0811,1.0],"29":[0.1129,0.0,-0.0455,0.0441,1.0],"3":[0.8065,0.0,-0.0455,0.0455,1.0],"30":[0.0645,0.0,0.0,0.0,1.0],"31":[0.0,0.0,0.0,0.0,1.0],"28":[0.1452,0.0,-0.0469,0.0484,1.0],"10":[0.6774,-0.0161,-0.0883,0.0536,1.0],"26":[0.129,-0.0323,-0.0833,0.0,0.5824],"27":[0.1774,-0.0323,-0.1071,0.0,1.0],"2":[0.9355,-0.0323,-0.0833,0.0,0.5824],"17":[0.2903,-0.0484,-0.1111,0.0,0.3084],"13":[0.3065,-0.0484,-0.1042,0.0,0.3084],"11":[0.3226,-0.0484,-0.1552,0.05,0.7714],"9":[0.4839,-0.0645,-0.14,0.0,0.3653],"14":[0.5806,-0.0806,-0.15,-0.0185,0.104],"8":[0.7097,-0.0968,-0.1668,-0.0312,0.064],"12":[0.6774,-0.129,-0.2097,-0.0556,0.032]},"Qwen3.5-27B":{"18":[0.3226,0.129,0.0278,0.2419,0.304],"14":[0.5645,0.1129,-0.0484,0.2858,0.6485],"25":[0.4194,0.0968,-0.0641,0.2354,0.6485],"21":[0.4355,0.0968,-0.04,0.2333,0.6485],"27":[0.3871,0.0968,-0.0536,0.2286,0.6485],"9":[0.8871,0.0806,-0.05,0.2001,0.6485],"10":[0.6774,0.0806,-0.0455,0.2084,0.6485],"31":[0.0968,0.0645,-0.0161,0.1552,0.6485],"7":[0.7581,0.0645,-0.1034,0.2222,0.8904],"17":[0.5484,0.0484,-0.1207,0.2242,0.996],"16":[0.4839,0.0323,-0.1047,0.1667,0.996],"1":[0.7742,0.0323,-0.0926,0.1572,0.996],"11":[0.6613,0.0161,-0.1305,0.1607,1.0],"23":[0.4516,0.0,-0.15,0.1607,1.0],"2":[0.7581,0.0,-0.1364,0.1379,1.0],"13":[0.5,0.0,-0.1447,0.1452,1.0],"20":[0.4355,0.0,-0.14,0.1429,1.0],"29":[0.1129,0.0,-0.1212,0.1207,1.0],"0":[0.7258,-0.0161,-0.1667,0.1304,1.0],"4":[0.6935,-0.0161,-0.1572,0.1364,1.0],"30":[0.0645,-0.0323,-0.1379,0.0806,0.996],"24":[0.4677,-0.0323,-0.1563,0.087,0.996],"22":[0.371,-0.0484,-0.1923,0.0811,0.9448],"28":[0.2581,-0.0484,-0.1818,0.08,0.9448],"26":[0.3065,-0.0484,-0.1613,0.0682,0.8904],"5":[0.5806,-0.0806,-0.2286,0.0536,0.6485],"6":[0.4516,-0.0806,-0.2001,0.0357,0.6485],"19":[0.5,-0.0806,-0.2258,0.0645,0.6485],"8":[0.5161,-0.0968,-0.2639,0.0556,0.6485],"15":[0.5484,-0.1129,-0.2308,0.0143,0.6485],"3":[0.5,-0.1129,-0.26,0.0517,0.6485],"12":[0.7419,-0.1452,-0.2298,-0.069,0.016]},"Qwen3.5-35B-A3B":{"9":[0.871,0.1935,0.0357,0.3594,0.224],"25":[0.3871,0.1613,0.0172,0.2963,0.2432],"12":[0.7419,0.1613,0.04,0.2857,0.224],"1":[0.7581,0.1613,0.0161,0.3077,0.2432],"18":[0.5806,0.1452,-0.0185,0.3158,0.4576],"20":[0.5323,0.129,-0.02,0.2778,0.4576],"10":[0.6129,0.0806,-0.0715,0.2223,0.69],"27":[0.4839,0.0806,-0.0568,0.2206,0.6857],"16":[0.3548,0.0645,-0.091,0.2206,0.768],"2":[0.7742,0.0645,-0.0714,0.2037,0.7107],"17":[0.5645,0.0484,-0.1081,0.1945,0.8307],"31":[0.0806,0.0,-0.1071,0.1034,1.0],"22":[0.4194,0.0,-0.1129,0.1061,1.0],"23":[0.5645,0.0,-0.1429,0.1528,1.0],"6":[0.5968,0.0,-0.1501,0.138,1.0],"0":[0.9032,-0.0161,-0.1184,0.0741,1.0],"24":[0.3226,-0.0161,-0.2038,0.1623,1.0],"11":[0.5968,-0.0323,-0.2001,0.1458,0.9843],"21":[0.4677,-0.0323,-0.2188,0.1667,1.0],"30":[0.2097,-0.0484,-0.1607,0.0667,0.7726],"28":[0.2581,-0.0484,-0.1897,0.0883,0.7861],"8":[0.5484,-0.0484,-0.1834,0.0833,0.7861],"14":[0.4516,-0.0806,-0.2292,0.0714,0.69],"5":[0.4355,-0.0806,-0.2414,0.0909,0.6984],"15":[0.5484,-0.0806,-0.2419,0.0862,0.7107],"29":[0.2903,-0.0968,-0.2667,0.0667,0.6857],"19":[0.3226,-0.0968,-0.2334,0.0345,0.5295],"13":[0.4677,-0.0968,-0.2667,0.0652,0.6857],"4":[0.6129,-0.1129,-0.2408,0.0167,0.4576],"7":[0.5484,-0.129,-0.2857,0.0385,0.4576],"3":[0.4516,-0.129,-0.2885,0.0294,0.4576],"26":[0.2419,-0.1452,-0.2656,-0.0312,0.224]}},"no_pref_offered":{"Gemma3-4B":{"23":[0.5247,0.1215,0.0375,0.2,0.0448],"9":[0.6027,0.1027,0.0042,0.1958,0.1058],"18":[0.7086,0.0957,0.0264,0.1681,0.0448],"8":[0.8366,0.0946,0.0,0.1906,0.1088],"15":[0.6237,0.0914,0.0157,0.1632,0.0777],"3":[0.6882,0.0914,0.005,0.1722,0.104],"29":[0.1871,0.0903,0.046,0.1305,0.0053],"25":[0.2962,0.0704,0.0064,0.145,0.104],"7":[0.7763,0.0667,0.0048,0.1345,0.104],"20":[0.3887,0.05,-0.0273,0.1282,0.3408],"4":[0.6091,0.0446,-0.0321,0.1228,0.4069],"28":[0.4634,0.0441,-0.0188,0.1043,0.2933],"16":[0.6613,0.0323,-0.0441,0.112,0.5132],"31":[0.1548,0.0258,-0.0368,0.0812,0.4689],"14":[0.5403,0.0242,-0.0649,0.1119,0.7017],"26":[0.3849,0.014,-0.0733,0.0933,0.7787],"10":[0.7925,0.0022,-0.0758,0.0851,0.973],"30":[0.1285,-0.0005,-0.0462,0.0494,0.973],"6":[0.7091,-0.0167,-0.1,0.0708,0.7713],"11":[0.4731,-0.0269,-0.097,0.0506,0.5227],"19":[0.4661,-0.0339,-0.1167,0.0419,0.5132],"5":[0.771,-0.0355,-0.1211,0.0533,0.5132],"0":[0.7828,-0.0398,-0.1108,0.0356,0.4407],"12":[0.1747,-0.0511,-0.1218,0.0167,0.2692],"22":[0.3145,-0.0565,-0.1426,0.0267,0.3408],"13":[0.8151,-0.072,-0.1309,-0.0135,0.0533],"17":[0.4489,-0.0833,-0.169,0.0025,0.12],"2":[0.3887,-0.0952,-0.1778,-0.0129,0.0818],"21":[0.3688,-0.0989,-0.1926,-0.0008,0.1088],"27":[0.271,-0.1,-0.1779,-0.0189,0.08],"1":[0.5183,-0.1591,-0.242,-0.0774,0.0053],"24":[0.1301,-0.1925,-0.2889,-0.1093,0.0053]},"Gemma3-12B":{"28":[0.3957,0.1215,0.0417,0.2056,0.0128],"5":[0.6183,0.1022,0.025,0.1822,0.0686],"15":[0.6989,0.1022,0.0072,0.1944,0.1135],"29":[0.129,0.0968,0.0354,0.1652,0.0107],"10":[0.6774,0.0968,0.0104,0.1884,0.096],"8":[0.6075,0.0753,0.0071,0.1445,0.1024],"2":[0.6183,0.0538,-0.0278,0.1369,0.4071],"0":[0.957,0.0538,-0.0064,0.1212,0.224],"6":[0.8978,0.043,-0.0123,0.1087,0.34],"31":[0.0586,0.0425,0.0136,0.0768,0.0213],"3":[0.8925,0.0376,-0.0362,0.1183,0.5861],"27":[0.3065,0.0323,-0.0507,0.1167,0.6336],"18":[0.7258,0.0323,-0.0589,0.1149,0.6336],"22":[0.2339,0.0242,-0.0406,0.0807,0.6336],"25":[0.4409,0.0215,-0.057,0.1076,0.7705],"7":[0.6129,0.0161,-0.0583,0.1022,0.8206],"30":[0.1441,0.0151,-0.046,0.0785,0.8206],"14":[0.6828,0.0054,-0.0714,0.0867,0.9569],"20":[0.5215,0.0054,-0.0652,0.0725,0.9355],"4":[0.8172,-0.0054,-0.0909,0.0802,0.958],"12":[0.2828,-0.0075,-0.0953,0.0838,0.9355],"9":[0.4839,-0.0323,-0.1111,0.0366,0.6196],"1":[0.5957,-0.0333,-0.1071,0.0439,0.6196],"16":[0.5,-0.0484,-0.1724,0.0686,0.6196],"24":[0.0586,-0.0543,-0.119,0.007,0.2215],"21":[0.4548,-0.0613,-0.1545,0.0247,0.352],"26":[0.3973,-0.0704,-0.1628,0.0128,0.2283],"11":[0.7688,-0.086,-0.1667,0.0,0.1653],"19":[0.3172,-0.1183,-0.1991,-0.0397,0.0107],"23":[0.2032,-0.1516,-0.2716,-0.0292,0.072],"17":[0.4441,-0.1527,-0.2465,-0.0559,0.0128],"13":[0.457,-0.1559,-0.25,-0.0617,0.0107]},"Gemma3-27B":{"9":[0.7204,0.172,0.0789,0.2727,0.008],"15":[0.4086,0.1344,0.0733,0.1952,0.008],"14":[0.5215,0.1183,0.0432,0.2056,0.0128],"10":[0.543,0.1075,0.0298,0.1889,0.0284],"18":[0.5108,0.1075,0.0267,0.1842,0.0284],"26":[0.1968,0.0677,0.0208,0.1287,0.008],"21":[0.3065,0.0645,0.0115,0.1333,0.0587],"16":[0.6559,0.043,-0.0469,0.1346,0.516],"20":[0.2849,0.043,0.0,0.088,0.1],"8":[0.7742,0.0323,-0.0417,0.1149,0.544],"30":[0.0946,0.0301,-0.0146,0.0862,0.3977],"6":[0.7796,0.0215,-0.0632,0.1056,0.7106],"31":[0.0269,0.0108,0.0,0.0269,0.3977],"29":[0.0398,0.0075,-0.0159,0.0372,0.7445],"4":[0.6882,-0.0054,-0.0694,0.049,0.931],"5":[0.9409,-0.0108,-0.0404,0.0115,0.6803],"11":[0.6183,-0.0108,-0.0764,0.0494,0.8403],"25":[0.2204,-0.0215,-0.1056,0.0617,0.7106],"0":[0.9409,-0.0269,-0.0556,-0.0046,0.096],"27":[0.228,-0.0301,-0.0716,0.0072,0.2471],"3":[0.8065,-0.0323,-0.0953,0.0278,0.4452],"22":[0.3495,-0.0376,-0.1322,0.0435,0.5338],"2":[0.7473,-0.043,-0.1022,0.0143,0.2796],"7":[0.6935,-0.0484,-0.1389,0.0389,0.4452],"24":[0.5699,-0.0591,-0.1282,0.0,0.1224],"19":[0.2602,-0.0624,-0.1256,-0.0029,0.0981],"12":[0.5516,-0.0774,-0.1552,-0.006,0.0812],"13":[0.7527,-0.086,-0.1505,-0.0307,0.008],"17":[0.5484,-0.0968,-0.1861,-0.0175,0.0465],"28":[0.4301,-0.1022,-0.1897,-0.025,0.0384],"23":[0.1237,-0.1022,-0.1798,-0.0244,0.0284],"1":[0.6667,-0.1075,-0.1979,-0.0333,0.0284]},"Gemma4-E4B":{"18":[0.5608,0.1253,0.0448,0.2123,0.032],"19":[0.4855,0.1145,0.0276,0.1994,0.048],"4":[0.7817,0.1043,0.0226,0.1917,0.0896],"6":[0.7145,0.0855,0.006,0.1646,0.136],"7":[0.7978,0.072,-0.0161,0.1697,0.3151],"30":[0.1812,0.0522,-0.0057,0.1149,0.224],"8":[0.6,0.0516,-0.028,0.125,0.464],"10":[0.6097,0.0452,-0.0542,0.1379,0.608],"24":[0.3597,0.0371,-0.0396,0.1131,0.608],"22":[0.2419,0.0323,-0.0284,0.1103,0.608],"0":[0.9935,0.0258,0.0,0.0682,0.608],"15":[0.4097,0.0226,-0.0597,0.1115,0.8403],"5":[0.9032,0.0161,-0.05,0.0841,0.8403],"29":[0.1586,0.0134,-0.1019,0.1302,0.9783],"11":[0.8661,0.0113,-0.0508,0.0772,0.8403],"12":[0.8263,0.0038,-0.05,0.0606,0.998],"17":[0.6306,0.0016,-0.0983,0.0969,0.998],"13":[0.6763,-0.0011,-0.0815,0.0772,0.998],"2":[0.5952,-0.0016,-0.0828,0.0769,0.998],"27":[0.4005,-0.0188,-0.0911,0.0606,0.8403],"3":[0.6581,-0.0194,-0.1081,0.0622,0.8403],"28":[0.0919,-0.021,-0.0921,0.05,0.8403],"20":[0.35,-0.021,-0.125,0.0875,0.8403],"23":[0.4102,-0.0253,-0.1293,0.0788,0.8403],"14":[0.7796,-0.0269,-0.0833,0.0246,0.608],"25":[0.3344,-0.0688,-0.1484,0.007,0.224],"26":[0.2366,-0.0699,-0.1536,0.004,0.224],"31":[0.0323,-0.0806,-0.1719,-0.0086,0.136],"9":[0.5425,-0.0866,-0.1556,-0.0151,0.1173],"21":[0.1328,-0.093,-0.1914,0.0056,0.224],"16":[0.171,-0.1194,-0.2004,-0.0465,0.008],"1":[0.4677,-0.1613,-0.2342,-0.0893,0.008]},"Gemma4-12B":{"11":[0.8548,0.2742,0.1481,0.3871,0.0023],"15":[0.7366,0.2366,0.1049,0.3625,0.0036],"8":[0.914,0.2204,0.1363,0.3065,0.0023],"18":[0.5645,0.1935,0.087,0.3044,0.0023],"9":[0.7742,0.1129,0.0,0.24,0.2095],"20":[0.7097,0.0806,-0.037,0.1957,0.4395],"4":[0.8226,0.0806,-0.0208,0.18,0.4037],"13":[0.5806,0.0484,-0.069,0.16,0.6996],"25":[0.5,0.0484,-0.069,0.1667,0.6996],"23":[0.3065,0.0484,-0.0556,0.1552,0.6996],"27":[0.2903,0.0323,-0.0435,0.1094,0.7093],"7":[0.6452,0.0323,-0.0806,0.1429,0.7988],"14":[0.3226,0.0323,-0.0714,0.1406,0.7988],"6":[0.7258,0.0323,-0.0682,0.1251,0.7988],"10":[0.7742,0.0323,-0.0893,0.1552,0.8117],"3":[0.7527,0.0108,-0.0953,0.1191,0.9259],"31":[0.0,0.0,0.0,0.0,1.0],"29":[0.0,-0.0179,-0.0625,0.0,0.8117],"30":[0.0185,-0.0185,-0.0909,0.0417,0.8117],"0":[0.8763,-0.0269,-0.1061,0.0441,0.7093],"28":[0.1071,-0.0357,-0.1053,0.037,0.6996],"12":[0.7258,-0.0484,-0.1539,0.0536,0.6996],"17":[0.3065,-0.0484,-0.1613,0.0714,0.6996],"19":[0.5591,-0.0538,-0.181,0.0699,0.6996],"24":[0.2258,-0.0806,-0.1897,0.0303,0.4395],"26":[0.125,-0.1071,-0.2188,0.0,0.2507],"2":[0.6344,-0.1237,-0.2084,-0.0466,0.0023],"22":[0.2258,-0.1452,-0.2353,-0.0535,0.0036],"21":[0.4516,-0.1452,-0.25,-0.04,0.0384],"1":[0.543,-0.1667,-0.256,-0.0833,0.0023],"5":[0.4839,-0.1774,-0.2963,-0.0741,0.0023],"16":[0.1552,-0.3621,-0.5,-0.2167,0.0023]},"Gemma4-26B-A4B":{"8":[0.7,0.2,0.0455,0.375,0.4053],"18":[0.3333,0.1667,0.0,0.5,1.0],"4":[0.7778,0.1667,-0.0833,0.4,0.744],"23":[0.25,0.125,0.0,0.5,1.0],"10":[0.75,0.125,0.0,0.2648,0.5623],"7":[0.7059,0.1176,0.0,0.25,0.5623],"14":[0.7368,0.0789,-0.0312,0.1905,0.744],"9":[0.9742,0.071,0.0167,0.1355,0.208],"1":[0.8889,0.0556,0.0,0.143,0.744],"2":[0.8929,0.0357,-0.0333,0.1111,1.0],"22":[0.0,0.0,0.0,0.0,1.0],"28":[0.0,0.0,0.0,0.0,1.0],"17":[0.0,0.0,0.0,0.0,1.0],"5":[0.0,0.0,0.0,0.0,1.0],"11":[0.25,0.0,-0.5,0.5,1.0],"21":[0.0,0.0,0.0,0.0,1.0],"16":[0.3333,0.0,-0.2143,0.2143,1.0],"25":[0.0,0.0,0.0,0.0,1.0],"30":[0.0,0.0,0.0,0.0,1.0],"31":[0.0,0.0,0.0,0.0,1.0],"29":[0.0,0.0,0.0,0.0,1.0],"12":[0.4286,0.0,-0.2143,0.2,1.0],"0":[0.9935,-0.0065,-0.0216,0.0,1.0],"15":[0.5952,-0.0714,-0.2369,0.0833,1.0],"27":[0.0,-0.0714,-0.25,0.0,1.0],"6":[0.4231,-0.0769,-0.2692,0.1111,1.0],"26":[0.0,-0.0833,-0.25,0.0,1.0],"24":[0.0,-0.0909,-0.2222,0.0,0.744],"3":[0.4706,-0.1176,-0.2941,0.0626,0.744],"20":[0.1429,-0.2143,-0.4167,0.0,0.5623],"13":[0.1,-0.25,-0.45,0.0,0.56],"19":[0.0,-0.3636,-0.5,-0.2143,0.016]},"Gemma4-31B":{"2":[1.0,0.0312,0.0,0.1,1.0],"6":[0.0,0.0,0.0,0.0,1.0],"5":[0.5,0.0,0.0,0.0,1.0],"17":[0.0,0.0,0.0,0.0,1.0],"21":[0.0,0.0,0.0,0.0,1.0],"11":[0.0,0.0,0.0,0.0,1.0],"12":[0.8333,0.0,0.0,0.0,1.0],"13":[0.0,0.0,0.0,0.0,1.0],"0":[1.0,0.0,0.0,0.0,1.0],"22":[0.8,0.0,0.0,0.0,1.0],"1":[1.0,0.0,0.0,0.0,1.0],"27":[0.0,0.0,0.0,0.0,1.0],"24":[0.0,0.0,0.0,0.0,1.0],"23":[0.0,0.0,0.0,0.0,1.0],"28":[0.0,0.0,0.0,0.0,1.0],"18":[0.6667,0.0,0.0,0.0,1.0],"31":[0.0,0.0,0.0,0.0,1.0],"14":[0.5,0.0,0.0,0.0,1.0],"26":[0.0,0.0,0.0,0.0,1.0],"29":[0.0,0.0,0.0,0.0,1.0],"30":[0.0,0.0,0.0,0.0,1.0],"15":[0.5,0.0,0.0,0.0,1.0],"20":[0.0,0.0,0.0,0.0,1.0],"9":[0.0,0.0,0.0,0.0,1.0],"25":[0.0,0.0,0.0,0.0,1.0],"7":[0.0,0.0,0.0,0.0,1.0],"8":[0.25,0.0,0.0,0.0,1.0],"10":[0.0,0.0,0.0,0.0,1.0],"4":[0.0,0.0,0.0,0.0,1.0],"19":[0.0,0.0,0.0,0.0,1.0],"16":[0.0,0.0,0.0,0.0,1.0],"3":[0.3333,-0.1667,-0.5,0.0,1.0]},"Qwen3.5-27B":{"8":[0.6968,0.0839,-0.0379,0.2001,0.6789],"7":[0.7726,0.079,-0.0393,0.2,0.6789],"14":[0.5301,0.0785,-0.0623,0.2327,0.6789],"11":[0.7183,0.0731,-0.0306,0.1784,0.6789],"10":[0.6608,0.064,-0.0726,0.1928,0.7022],"9":[0.8694,0.0629,-0.0413,0.1821,0.6789],"0":[0.8043,0.0624,-0.045,0.1701,0.6789],"26":[0.414,0.0591,-0.028,0.1531,0.6789],"3":[0.6575,0.0446,-0.0514,0.1398,0.7022],"16":[0.493,0.0414,-0.08,0.1586,0.8303],"6":[0.5548,0.0226,-0.0821,0.1272,0.9803],"5":[0.672,0.0108,-0.1176,0.1355,0.9803],"4":[0.7194,0.0097,-0.1081,0.1395,0.9803],"18":[0.1989,0.0054,-0.072,0.0833,0.9803],"1":[0.7419,0.0,-0.1051,0.1068,0.9817],"31":[0.0122,-0.0044,-0.0467,0.0264,1.0],"28":[0.3005,-0.0059,-0.1271,0.1301,0.9803],"25":[0.3129,-0.0097,-0.1422,0.125,0.9803],"30":[0.086,-0.0108,-0.0833,0.0802,0.9803],"21":[0.3269,-0.0118,-0.1258,0.1005,0.9803],"15":[0.6478,-0.0134,-0.1233,0.1059,0.9803],"27":[0.271,-0.0194,-0.1389,0.0977,0.9803],"19":[0.5516,-0.029,-0.1391,0.0785,0.9648],"22":[0.3769,-0.0425,-0.15,0.0495,0.7022],"20":[0.3898,-0.0457,-0.15,0.0534,0.7022],"24":[0.4441,-0.0559,-0.1657,0.04,0.6789],"12":[0.8237,-0.0634,-0.1389,0.0088,0.6789],"2":[0.6898,-0.0683,-0.1853,0.0516,0.6789],"29":[0.0306,-0.0694,-0.1689,0.0199,0.6789],"17":[0.4274,-0.0726,-0.2038,0.0506,0.6789],"13":[0.4242,-0.0758,-0.1911,0.0447,0.6789],"23":[0.35,-0.1016,-0.2146,0.0149,0.6789]},"Qwen3.5-35B-A3B":{"20":[0.5527,0.1495,0.0289,0.2806,0.256],"22":[0.5683,0.1489,0.0198,0.2808,0.256],"18":[0.5639,0.1139,-0.0236,0.24,0.476],"28":[0.4167,0.1102,-0.0297,0.2334,0.476],"5":[0.6253,0.1091,-0.038,0.2553,0.4975],"8":[0.6812,0.0844,-0.0301,0.1973,0.4975],"1":[0.6618,0.0651,-0.0478,0.1818,0.6533],"9":[0.7419,0.0645,-0.0829,0.2247,0.7939],"27":[0.4592,0.0626,-0.1125,0.2275,0.7939],"25":[0.2747,0.0489,-0.0982,0.1958,0.7939],"2":[0.7505,0.0409,-0.062,0.1531,0.7939],"6":[0.6317,0.0349,-0.0829,0.1476,0.7939],"17":[0.5505,0.0344,-0.1,0.1827,0.8205],"12":[0.6059,0.0253,-0.1161,0.1634,0.8498],"24":[0.3411,0.0078,-0.1846,0.1954,0.929],"31":[0.0931,0.0069,-0.0727,0.0807,0.929],"30":[0.2462,-0.0118,-0.1422,0.1288,0.929],"3":[0.564,-0.0167,-0.1327,0.1096,0.8663],"16":[0.2408,-0.0178,-0.1943,0.1676,0.929],"0":[0.8978,-0.0215,-0.1,0.0609,0.8147],"14":[0.507,-0.0253,-0.15,0.1151,0.8498],"29":[0.3467,-0.0367,-0.1667,0.1017,0.8147],"21":[0.4575,-0.0425,-0.1911,0.0945,0.7956],"7":[0.6258,-0.0516,-0.2053,0.1118,0.7939],"11":[0.5632,-0.0575,-0.1828,0.0691,0.7939],"19":[0.3602,-0.0591,-0.1774,0.0606,0.7939],"15":[0.564,-0.0651,-0.22,0.1006,0.7939],"10":[0.429,-0.1032,-0.248,0.0461,0.4975],"13":[0.4559,-0.1086,-0.246,0.0261,0.476],"26":[0.215,-0.1517,-0.2885,-0.0034,0.3072],"23":[0.4038,-0.1608,-0.2992,-0.0083,0.3072],"4":[0.5457,-0.1801,-0.33,-0.0327,0.256]}}},"fsum":{"qvar":{"Gemma3-12B":{"shift":0.1109,"lo":0.0962,"hi":0.1366,"max":0.4032,"spearman":0.8175,"vsNoise":0.8913,"gap":0.1325,"gapP":0.0005,"moved":10},"Gemma3-27B":{"shift":0.0706,"lo":0.0633,"hi":0.0945,"max":0.2097,"spearman":0.9206,"vsNoise":0.9951,"gap":0.0419,"gapP":0.0005,"moved":8},"Gemma3-4B":{"shift":0.0716,"lo":0.0637,"hi":0.0933,"max":0.2097,"spearman":0.8883,"vsNoise":0.9599,"gap":0.0702,"gapP":0.0005,"moved":5},"Gemma4-12B":{"shift":0.0685,"lo":0.0618,"hi":0.0896,"max":0.2258,"spearman":0.8819,"vsNoise":0.9831,"gap":0.0515,"gapP":0.0005,"moved":8},"Gemma4-26B-A4B":{"shift":0.0534,"lo":0.048,"hi":0.0731,"max":0.2419,"spearman":0.9523,"vsNoise":1.0111,"gap":0.0291,"gapP":0.0005,"moved":4},"Gemma4-31B":{"shift":0.0605,"lo":0.0519,"hi":0.0817,"max":0.1935,"spearman":0.9357,"vsNoise":1.0145,"gap":0.0294,"gapP":0.0005,"moved":4},"Gemma4-E4B":{"shift":0.0645,"lo":0.0578,"hi":0.0927,"max":0.1935,"spearman":0.9407,"vsNoise":1.0109,"gap":0.0287,"gapP":0.0005,"moved":0},"Qwen3.5-27B":{"shift":0.0635,"lo":0.0608,"hi":0.0983,"max":0.1452,"spearman":0.9306,"vsNoise":1.0246,"gap":0.0088,"gapP":0.023,"moved":0}},"object":{"Gemma3-12B":{"shift":0.0938,"lo":0.0875,"hi":0.122,"max":0.4032,"spearman":0.8469,"vsNoise":0.9033,"gap":0.1199,"gapP":0.0005,"moved":10},"Gemma3-27B":{"shift":0.0746,"lo":0.0632,"hi":0.098,"max":0.2258,"spearman":0.9153,"vsNoise":0.9926,"gap":0.044,"gapP":0.0005,"moved":7},"Gemma3-4B":{"shift":0.0958,"lo":0.0837,"hi":0.1193,"max":0.2903,"spearman":0.8403,"vsNoise":0.9021,"gap":0.1177,"gapP":0.0005,"moved":11},"Gemma4-12B":{"shift":0.0635,"lo":0.0567,"hi":0.0882,"max":0.1613,"spearman":0.9127,"vsNoise":1.0028,"gap":0.0323,"gapP":0.0005,"moved":4},"Gemma4-26B-A4B":{"shift":0.0806,"lo":0.0716,"hi":0.1036,"max":0.2903,"spearman":0.8593,"vsNoise":0.9679,"gap":0.0652,"gapP":0.0005,"moved":6},"Gemma4-31B":{"shift":0.0766,"lo":0.0678,"hi":0.1007,"max":0.3387,"spearman":0.8984,"vsNoise":0.9726,"gap":0.0634,"gapP":0.0005,"moved":7},"Gemma4-E4B":{"shift":0.0927,"lo":0.0809,"hi":0.1185,"max":0.2258,"spearman":0.8844,"vsNoise":0.9534,"gap":0.0739,"gapP":0.0005,"moved":8},"Qwen3.5-27B":{"shift":0.0968,"lo":0.092,"hi":0.1321,"max":0.2742,"spearman":0.8113,"vsNoise":0.9098,"gap":0.1038,"gapP":0.0005,"moved":5},"Qwen3.5-35B-A3B":{"shift":0.0958,"lo":0.0939,"hi":0.1369,"max":0.2903,"spearman":0.752,"vsNoise":0.9108,"gap":0.0959,"gapP":0.0005,"moved":2}},"subject":{"Gemma3-12B":{"shift":0.0635,"lo":0.0587,"hi":0.0875,"max":0.2742,"spearman":0.8753,"vsNoise":0.9987,"gap":0.04,"gapP":0.0005,"moved":4},"Gemma3-27B":{"shift":0.0565,"lo":0.0495,"hi":0.0762,"max":0.1774,"spearman":0.9511,"vsNoise":1.0176,"gap":0.0262,"gapP":0.0005,"moved":7},"Gemma3-4B":{"shift":0.0605,"lo":0.0511,"hi":0.0788,"max":0.1935,"spearman":0.9342,"vsNoise":0.9928,"gap":0.046,"gapP":0.0005,"moved":6},"Gemma4-12B":{"shift":0.0373,"lo":0.0328,"hi":0.0559,"max":0.1129,"spearman":0.9618,"vsNoise":1.0407,"gap":0.0043,"gapP":0.028,"moved":0},"Gemma4-26B-A4B":{"shift":0.0393,"lo":0.0355,"hi":0.059,"max":0.1452,"spearman":0.9277,"vsNoise":1.0324,"gap":0.0122,"gapP":0.005,"moved":0},"Gemma4-31B":{"shift":0.0393,"lo":0.0332,"hi":0.058,"max":0.129,"spearman":0.9745,"vsNoise":1.0395,"gap":0.0121,"gapP":0.001,"moved":1},"Gemma4-E4B":{"shift":0.0423,"lo":0.0438,"hi":0.069,"max":0.1613,"spearman":0.9697,"vsNoise":1.0364,"gap":0.0072,"gapP":0.012,"moved":0},"Qwen3.5-27B":{"shift":0.0595,"lo":0.0639,"hi":0.1008,"max":0.1452,"spearman":0.9433,"vsNoise":1.0326,"gap":0.0031,"gapP":0.038,"moved":1},"Qwen3.5-35B-A3B":{"shift":0.0806,"lo":0.0782,"hi":0.121,"max":0.1935,"spearman":0.8418,"vsNoise":0.9759,"gap":0.0487,"gapP":0.006,"moved":0}},"no_pref_offered":{"Gemma3-12B":{"shift":0.0611,"lo":0.0557,"hi":0.082,"max":0.1559,"spearman":0.929,"vsNoise":1.0064,"gap":0.0327,"gapP":0.0005,"moved":6},"Gemma3-27B":{"shift":0.06,"lo":0.0518,"hi":0.0767,"max":0.172,"spearman":0.9617,"vsNoise":1.0138,"gap":0.0272,"gapP":0.0005,"moved":11},"Gemma3-4B":{"shift":0.0664,"lo":0.0585,"hi":0.0863,"max":0.1925,"spearman":0.9407,"vsNoise":0.9854,"gap":0.0485,"gapP":0.0005,"moved":5},"Gemma4-12B":{"shift":0.096,"lo":0.0877,"hi":0.1205,"max":0.3621,"spearman":0.8284,"vsNoise":0.9317,"gap":0.0905,"gapP":0.0005,"moved":10},"Gemma4-26B-A4B":{"shift":0.0778,"lo":0.064,"hi":0.1185,"max":0.3636,"spearman":0.9352,"vsNoise":1.0404,"gap":0.0267,"gapP":0.004,"moved":1},"Gemma4-31B":{"shift":0.0062,"lo":0.0,"hi":0.0187,"max":0.1667,"spearman":0.9988,"vsNoise":1.1628,"gap":0.0,"gapP":1.0,"moved":0},"Gemma4-E4B":{"shift":0.0509,"lo":0.049,"hi":0.0741,"max":0.1613,"spearman":0.9626,"vsNoise":1.0238,"gap":0.017,"gapP":0.001,"moved":4},"Qwen3.5-27B":{"shift":0.0437,"lo":0.0469,"hi":0.0769,"max":0.1016,"spearman":0.9696,"vsNoise":1.0457,"gap":-0.0068,"gapP":0.132,"moved":0},"Qwen3.5-35B-A3B":{"shift":0.0693,"lo":0.0697,"hi":0.1071,"max":0.1801,"spearman":0.8123,"vsNoise":0.9908,"gap":0.0355,"gapP":0.008,"moved":0}}}};
+
+/* ── helpers ──────────────────────────────────────────────────────────── */
+const $ = s => document.querySelector(s);
+const el = (t, c, h) => { const n = document.createElement(t); if (c) n.className = c;
+  if (h !== undefined) n.innerHTML = h; return n; };
+const pct = v => v == null ? "—" : (v > 0 && v < 0.005 ? "<1%" : (v * 100).toFixed(0) + "%");
+const pts = v => v == null ? "—" : (v * 100).toFixed(1);
+const sgn = v => (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(v * 100).toFixed(1);
+const fx = (v, n) => v == null ? "—" : v.toFixed(n);
+const nfmt = n => n.toLocaleString("en-US");
+const css = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+
+const MODELS = D.models;
+const BY_ID = Object.fromEntries(MODELS.map(m => [m.id, m]));
+const ATTRS = D.attrs;
+const FACTORS = D.meta.factors;
+const short = id => id.replace("Gemma", "G").replace("Qwen", "Q").replace("-A3B", "a").replace("-A4B", "a");
+
+/* ── state ────────────────────────────────────────────────────────────── */
+const S = { model: "*", framing: "base", view: "chart", mover: FACTORS[1].key,
+            trend: "size", hoverModel: null,
+            compareA: MODELS[0] ? MODELS[0].id : null,
+            compareB: MODELS.length ? MODELS[MODELS.length - 1].id : null };
+
+const included = () => MODELS;
+
+function winOf(modelId, i, framing) {
+  if (framing === "base") { const r = D.base[modelId] && D.base[modelId][i]; return r ? r[0] : null; }
+  const r = D.flips[framing] && D.flips[framing][modelId] && D.flips[framing][modelId][i];
+  return r ? r[0] : null;
+}
+function shiftOf(modelId, i, framing) {
+  if (framing === "base") return null;
+  const r = D.flips[framing] && D.flips[framing][modelId] && D.flips[framing][modelId][i];
+  return r ? { d: r[1], lo: r[2], hi: r[3], q: r[4] } : null;
+}
+/* cohort mean over the included models */
+function cohort(i, framing) {
+  const vals = [];
+  for (const m of included()) { const v = winOf(m.id, i, framing); if (v != null) vals.push([m.id, v]); }
+  if (!vals.length) return null;
+  const xs = vals.map(v => v[1]);
+  const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
+  return { mean, n: xs.length, min: Math.min(...xs), max: Math.max(...xs), each: vals };
+}
+
+/* ── tooltip ──────────────────────────────────────────────────────────── */
+const tip = $("#tip");
+function showTip(e, html) {
+  tip.innerHTML = html; tip.classList.add("on");
+  const r = tip.getBoundingClientRect();
+  let x = e.clientX + 16, y = e.clientY + 16;
+  if (x + r.width > innerWidth - 12) x = e.clientX - r.width - 16;
+  if (y + r.height > innerHeight - 12) y = e.clientY - r.height - 16;
+  tip.style.left = Math.max(8, x) + "px"; tip.style.top = Math.max(8, y) + "px";
+}
+const hideTip = () => tip.classList.remove("on");
+addEventListener("scroll", hideTip, { passive: true });
+
+/* ── study summary ────────────────────────────────────────────────────── */
+(function summary() {
+  $("#studyMeta").textContent =
+    `${D.meta.models} Models · ${D.meta.attributes} Qualities · ${nfmt(D.meta.trials)} Choices · ` +
+    `${D.meta.conditions} Question Configurations`;
+  $("#footNote").textContent =
+    `${D.meta.models} Models · ${D.meta.attributes} Qualities · ${nfmt(D.meta.trials)} Choices.`;
+})();
+
+/* ══════════════════════════════════════════════════════════════════════
+   RANKING
+   ══════════════════════════════════════════════════════════════════════ */
+(function controls() {
+  const sel = $("#modelSel");
+  sel.append(new Option(`All ${D.meta.models} models — cohort view`, "*"));
+  let g = null, last = null;
+  for (const m of MODELS) {
+    if (m.gen !== last) { g = document.createElement("optgroup"); g.label = m.gen; sel.append(g); last = m.gen; }
+    g.append(new Option(m.id, m.id));
+  }
+  sel.onchange = () => { S.model = sel.value; renderRank(); };
+
+  const grid = $("#framingGrid");
+  for (const f of FACTORS) {
+    const box = el("div", "fgroup");
+    box.append(el("div", "eyebrow", f.label));
+    const seg = el("div", "seg");
+    const a = el("button", null, f.base), b = el("button", null, f.flip);
+    a.onclick = () => { S.framing = "base"; renderRank(); };
+    b.onclick = () => { S.framing = f.key; renderRank(); };
+    seg.append(a, b); box.append(seg); grid.append(box);
+    f._btns = [a, b];
+  }
+
+  for (const b of $("#viewSeg").children)
+    b.onclick = () => { S.view = b.dataset.view; renderRank(); };
+})();
+
+function syncControls() {
+  for (const f of FACTORS) {
+    f._btns[0].setAttribute("aria-pressed", String(S.framing !== f.key));
+    f._btns[1].setAttribute("aria-pressed", String(S.framing === f.key));
+  }
+  for (const b of $("#viewSeg").children)
+    b.setAttribute("aria-pressed", String(b.dataset.view === S.view));
+}
+
+function framingLabel() {
+  if (S.framing === "base") return "the Must Pick One baseline";
+  return FACTORS.find(x => x.key === S.framing).when;
+}
+
+function renderRank() {
+  syncControls();
+  const cohortMode = S.model === "*";
+  const models = included();
+  const rows = [];
+
+  for (let i = 0; i < ATTRS.length; i++) {
+    if (cohortMode) {
+      const c = cohort(i, S.framing);
+      if (!c) continue;
+      const b = S.framing === "base" ? null : cohort(i, "base");
+      rows.push({ i, v: c.mean, c, delta: b ? c.mean - b.mean : null });
+    } else {
+      const v = winOf(S.model, i, S.framing);
+      if (v == null) continue;
+      const base = D.base[S.model][i];
+      const sh = shiftOf(S.model, i, S.framing);
+      rows.push({ i, v, ci: S.framing === "base" && base ? [base[1], base[2]] : null,
+                  n: base ? base[4] : null, delta: sh ? sh.d : null, q: sh ? sh.q : null });
+    }
+  }
+  rows.sort((a, b) => b.v - a.v);
+
+  const showDelta = S.framing !== "base";
+  const wide = showDelta ? "34px minmax(190px,1.25fr) minmax(180px,1.9fr) 52px 56px"
+                         : "34px minmax(190px,1.25fr) minmax(180px,1.9fr) 52px";
+  const narrow = showDelta ? "20px minmax(84px,1.1fr) minmax(88px,1fr) 36px 44px"
+                           : "20px minmax(84px,1.1fr) minmax(88px,1fr) 36px";
+
+  $("#rankTitle").textContent = cohortMode
+    ? `Cohort Average · ${models.length} Models` : S.model;
+  $("#rankSub").textContent = cohortMode
+    ? `Each small dot is one model's own score; the large dot is the average of them, `
+      + `at ${framingLabel()}.`
+    : `Share of match-ups won, ${framingLabel()}.`
+      + (S.framing === "base" ? " Bars carry a 95% interval." : "");
+
+  const host = $("#rankChart");
+  host.innerHTML = "";
+
+  if (S.view === "table") { host.append(rankTable(rows, cohortMode, showDelta)); }
+  else {
+    const wrap = el("div", "rank");
+    wrap.style.setProperty("--cols-wide", wide);
+    wrap.style.setProperty("--cols-narrow", narrow);
+    const ax = el("div", "rank-axis");
+    ax.append(el("div"), el("div"));
+    const ticks = el("div", "ticks");
+    for (const t of [0, 25, 50, 75, 100]) {
+      const s = el("span", null, t + "%");
+      s.style.left = t + "%";
+      if (t === 0) { s.style.transform = "none"; }
+      if (t === 100) { s.style.transform = "translateX(-100%)"; }
+      ticks.append(s);
+    }
+    ax.append(ticks, el("div"), ...(showDelta ? [el("div")] : []));
+    wrap.append(ax);
+
+    const list = el("div", "rank-rows");
+    rows.forEach((r, k) => list.append(rankRow(r, k, cohortMode, showDelta)));
+    wrap.append(list);
+    host.append(wrap);
+  }
+
+  const L = $("#rankLegend");
+  L.innerHTML = "";
+  if (S.view === "chart") {
+    if (cohortMode) {
+      L.append(keyEl("sw mean", "average of the models"), keyEl("sw dot", "one model"),
+               keyEl("sw span", "range across models"));
+    } else {
+      L.append(keyEl("sw", "share of match-ups won"));
+      if (S.framing === "base") L.append(keyEl("sw ci", "95% interval"));
+    }
+    L.append(el("span", null, "<span style='color:var(--ink-3)'>50% is an even match-up.</span>"));
+  }
+
+  const fn = $("#rankFootnote");
+  if (cohortMode) {
+    fn.textContent = `All ${D.meta.models} models are included because the baseline requires a choice.`;
+  } else {
+    const m = BY_ID[S.model];
+    fn.innerHTML = `${m.gen}, ${m.total}B parameters` +
+      (m.moe ? ` (${m.active}B active)` : "") + `, released ${m.release}. ` +
+      `Selected No Preference on ${pct(m.declineRate)} of matched trials when that option was available.`;
+  }
+}
+
+function rankRow(r, k, cohortMode, showDelta) {
+  const a = ATTRS[r.i];
+  const row = el("div", "rank-row");
+  row.append(el("div", "rk", String(k + 1)), el("div", "lbl", a.text));
+
+  const plot = el("div", "plot");
+  plot.append(el("div", "grid"));
+
+  if (cohortMode) {
+    const sp = el("div", "span");
+    sp.style.left = r.c.min * 100 + "%";
+    sp.style.width = Math.max(0.3, (r.c.max - r.c.min) * 100) + "%";
+    plot.append(sp);
+    for (const [mid, v] of r.c.each) {
+      const d = el("div", "dot" + (BY_ID[mid].thin ? " thin" : ""));
+      d.style.left = v * 100 + "%";
+      d.append(el("i"));
+      d.onmouseenter = e => { S.hoverModel = mid; showTip(e, rowTip(r, cohortMode, mid)); };
+      d.onmouseleave = () => { S.hoverModel = null; hideTip(); };
+      d.onclick = () => { S.model = mid; $("#modelSel").value = mid; renderRank(); };
+      plot.append(d);
+    }
+    const mean = el("div", "mean");
+    mean.style.left = r.v * 100 + "%";
+    plot.append(mean);
+  } else {
+    const bar = el("div", "bar" + (BY_ID[S.model] && BY_ID[S.model].thin ? " thin" : ""));
+    bar.style.width = Math.max(0, r.v * 100) + "%";
+    plot.append(bar);
+    if (r.ci) {
+      const ci = el("span", "ci");
+      ci.style.left = r.ci[0] * 100 + "%";
+      ci.style.width = Math.max(0.4, (r.ci[1] - r.ci[0]) * 100) + "%";
+      plot.append(ci);
+    }
+  }
+  row.append(plot);
+
+  row.append(el("div", "val", pct(r.v)));
+  if (showDelta) {
+    const d = el("div", "dlt", r.delta == null ? "—" : sgn(r.delta));
+    if (r.delta != null && r.q != null && r.q < 0.05)
+      d.style.color = r.delta > 0 ? "var(--pos)" : "var(--neg)";
+    row.append(d);
+  }
+
+  row.onmousemove = e => { if (!S.hoverModel) showTip(e, rowTip(r, cohortMode, null)); };
+  row.onmouseleave = hideTip;
+  return row;
+}
+
+function rowTip(r, cohortMode, highlight) {
+  const a = ATTRS[r.i];
+  let h = `<div class="t">${a.text}</div>`;
+  if (cohortMode) {
+    h += `<div class="kv"><span>cohort average</span><span class="hi">${pct(r.v)}</span>` +
+         `<span>range across models</span><span>${pct(r.c.min)} – ${pct(r.c.max)}</span></div>` +
+         `<div class="sep"></div><div class="kv">`;
+    for (const [mid, v] of [...r.c.each].sort((x, y) => y[1] - x[1]))
+      h += `<span class="${mid === highlight ? "hi" : ""}">${mid}</span>` +
+           `<span class="${mid === highlight ? "hi" : ""}">${pct(v)}</span>`;
+    h += `</div>`;
+  } else {
+    h += `<div class="kv"><span>share of match-ups won</span><span class="hi">${pct(r.v)}</span>`;
+    if (r.ci) h += `<span>95% interval</span><span>${pct(r.ci[0])} – ${pct(r.ci[1])}</span>`;
+    if (r.n) h += `<span>match-ups</span><span>${r.n}</span>`;
+    if (r.delta != null) {
+      h += `<span>change vs standard</span><span>${sgn(r.delta)} pts</span>`;
+      h += `<span>survives correction</span><span>${r.q != null && r.q < 0.05 ? "yes" : "no"}</span>`;
+    }
+    h += `</div>`;
+  }
+  return h;
+}
+
+function rankTable(rows, cohortMode, showDelta) {
+  const t = el("table");
+  const head = ["#", "Quality", "Score"];
+  if (cohortMode) head.push("Lowest model", "Highest model", "Models");
+  else { head.push("95% interval", "Match-ups"); }
+  if (showDelta) head.push("Change", "Real?");
+  t.innerHTML = "<thead><tr>" + head.map(h => `<th>${h}</th>`).join("") + "</tr></thead>";
+  const tb = el("tbody");
+  rows.forEach((r, k) => {
+    const cells = [k + 1, ATTRS[r.i].text, pct(r.v)];
+    if (cohortMode) cells.push(pct(r.c.min), pct(r.c.max), r.c.n);
+    else cells.push(r.ci ? `${pct(r.ci[0])} – ${pct(r.ci[1])}` : "—", r.n ?? "—");
+    if (showDelta) cells.push(r.delta == null ? "—" : sgn(r.delta) + " pts",
+                              r.q == null ? "—" : (r.q < 0.05 ? "yes" : "no"));
+    const tr = el("tr");
+    cells.forEach((c, ci) => { const td = el("td", ci === 2 ? "q" : null, String(c));
+      if (ci === 1) td.style.whiteSpace = "normal"; tr.append(td); });
+    tb.append(tr);
+  });
+  t.append(tb);
+  const w = el("div", "scroll"); w.append(t); return w;
+}
+function keyEl(cls, label) {
+  const s = el("span", "key");
+  s.append(el("span", "sw " + cls), document.createTextNode(label));
+  return s;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   MODEL COMPARISON
+   ══════════════════════════════════════════════════════════════════════ */
+function renderCompare() {
+  const aSel = $("#compareA"), bSel = $("#compareB");
+  if (!aSel.children.length) {
+    for (const m of MODELS) {
+      aSel.append(new Option(m.id, m.id));
+      bSel.append(new Option(m.id, m.id));
+    }
+    aSel.value = S.compareA;
+    bSel.value = S.compareB;
+    aSel.onchange = () => { S.compareA = aSel.value; renderCompare(); };
+    bSel.onchange = () => { S.compareB = bSel.value; renderCompare(); };
+  }
+  const rows = [];
+  for (let i = 0; i < ATTRS.length; i++) {
+    const av = winOf(S.compareA, i, "base"), bv = winOf(S.compareB, i, "base");
+    if (av != null && bv != null) rows.push({ i, av, bv, gap: Math.abs(av - bv) });
+  }
+  rows.sort((a, b) => b.gap - a.gap);
+
+  const W = 1020, rowH = 22, padL = 460, padR = 88, padT = 38, padB = 34;
+  const H = padT + rows.length * rowH + padB;
+  const x = v => padL + v * (W - padL - padR);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Comparison of ${esc(S.compareA)} and ${esc(S.compareB)}">`;
+  for (const t of [0, .25, .5, .75, 1]) {
+    s += `<line class="${t === .5 ? "axis" : "gridline"}" x1="${x(t)}" y1="${padT - 8}" x2="${x(t)}" y2="${H - padB + 2}"/>`;
+    s += `<text x="${x(t)}" y="${padT - 15}" text-anchor="middle">${(t * 100).toFixed(0)}%</text>`;
+  }
+  s += `<text x="${W - padR + 12}" y="${padT - 15}">GAP</text>`;
+  rows.forEach((r, k) => {
+    const y = padT + k * rowH + rowH / 2;
+    s += `<text x="${padL - 12}" y="${y + 4}" class="lbl" text-anchor="end">${esc(clip(ATTRS[r.i].text, 72))}</text>`;
+    s += `<line x1="${x(r.av)}" y1="${y}" x2="${x(r.bv)}" y2="${y}" stroke="var(--ink-3)" stroke-width="2" opacity=".35"/>`;
+    s += `<circle cx="${x(r.av)}" cy="${y}" r="5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"><title>${esc(S.compareA)} · ${esc(ATTRS[r.i].text)} · ${pct(r.av)}</title></circle>`;
+    s += `<circle cx="${x(r.bv)}" cy="${y}" r="5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"><title>${esc(S.compareB)} · ${esc(ATTRS[r.i].text)} · ${pct(r.bv)}</title></circle>`;
+    s += `<text x="${W - padR + 12}" y="${y + 4}">${pts(r.gap)}</text>`;
+  });
+  s += `</svg>`;
+  $("#compareChart").innerHTML = s;
+  $("#compareLegend").innerHTML =
+    `<span class="key"><span class="sw" style="background:var(--s1);border-radius:50%"></span>${esc(S.compareA)}</span>` +
+    `<span class="key"><span class="sw" style="background:var(--s2);border-radius:50%"></span>${esc(S.compareB)}</span>` +
+    `<span style="color:var(--ink-3)">Qualities Are Ordered by the Largest Difference.</span>`;
+}
+const esc = t => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+
+/* ══════════════════════════════════════════════════════════════════════
+   FRAMING
+   ══════════════════════════════════════════════════════════════════════ */
+function renderFraming() {
+  const models = included();
+  const t = el("table");
+  t.innerHTML = "<thead><tr><th>Model</th>" +
+    FACTORS.map(f => `<th>${f.label}<br><span style="font-size:9px">${f.base} → ${f.flip}</span></th>`).join("") +
+    "</tr></thead>";
+  const tb = el("tbody");
+  for (const m of models) {
+    const tr = el("tr");
+    tr.append(el("td", null, m.id));
+    for (const f of FACTORS) {
+      const r = D.fsum[f.key][m.id];
+      const td = el("td");
+      if (!r || r.gapP == null) {
+        td.innerHTML = `<span class="sig"><b>Not Available</b><small>—</small></span>`;
+      } else {
+        const significant = r.gapP < 0.05;
+        const p = r.gapP < 0.001 ? "&lt; .001" : `= ${r.gapP.toFixed(3).replace("0.", ".")}`;
+        td.innerHTML = `<span class="sig ${significant ? "yes" : "no"}">` +
+          `<b>${significant ? "Significant" : "Not Significant"}</b><small>p ${p}</small></span>`;
+      }
+      tr.append(td);
+    }
+    tb.append(tr);
+  }
+  const totals = el("tr");
+  totals.append(el("td", "q", "Models Significant"));
+  for (const f of FACTORS) {
+    const n = models.filter(m => {
+      const r = D.fsum[f.key][m.id];
+      return r && r.gapP != null && r.gapP < 0.05;
+    }).length;
+    totals.append(el("td", "q", `${n} of ${models.length}`));
+  }
+  tb.append(totals);
+  t.append(tb);
+  $("#framingMatrix").innerHTML = ""; $("#framingMatrix").append(t);
+  $("#framingLegend").innerHTML =
+    `<span style="color:var(--ink-3)">Two-Sided Split-Half Test · Significant at p &lt; .05.</span>`;
+}
+
+function renderMovers() {
+  const seg = $("#moverSeg");
+  if (!seg.children.length) {
+    for (const factor of FACTORS) {
+      const b = el("button", null, factor.label);
+      b.onclick = () => { S.mover = factor.key; renderMovers(); };
+      seg.append(b);
+    }
+  }
+  const f = FACTORS.find(x => x.key === S.mover);
+  for (let i = 0; i < FACTORS.length; i++)
+    $("#moverSeg").children[i].setAttribute("aria-pressed", String(FACTORS[i].key === S.mover));
+
+  const models = included();
+  const rows = [];
+  for (let i = 0; i < ATTRS.length; i++) {
+    const ds = [], sure = [];
+    for (const m of models) {
+      const s = shiftOf(m.id, i, f.key);
+      if (s && s.d != null) { ds.push(s.d); if (s.q != null && s.q < 0.05) sure.push(m.id); }
+    }
+    if (!ds.length) continue;
+    const mean = ds.reduce((a, b) => a + b, 0) / ds.length;
+    const up = ds.filter(d => d > 0).length;
+    rows.push({ i, mean, up, n: ds.length, sure: sure.length });
+  }
+  rows.sort((a, b) => b.mean - a.mean);
+
+  $("#moversSub").innerHTML =
+    `Average change in each quality's score when the question changes from ` +
+    `<b>${f.base}</b> to <b>${f.flip}</b>, across ${models.length} models. ` +
+    `Bars right of the line mean the quality is wanted more under the new framing.`;
+
+  const W = 1020, rowH = 20, padL = 460, padR = 124, padT = 40, padB = 20;
+  const H = padT + rows.length * rowH + padB;
+  const lim = Math.max(0.06, Math.max(...rows.map(r => Math.abs(r.mean))) * 1.12);
+  const mid = padL + (W - padL - padR) / 2;
+  const x = v => mid + (v / lim) * ((W - padL - padR) / 2);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Average change per quality">`;
+  s += `<text x="${W - padR + 8}" y="${padT - 26}">CHANGE</text>`;
+  s += `<text x="${W - padR + 62}" y="${padT - 26}">MODELS SURE</text>`;
+  for (const t of [-1, -.5, 0, .5, 1]) {
+    const v = t * lim;
+    s += `<line class="${t === 0 ? "axis" : "gridline"}" x1="${x(v)}" y1="${padT - 10}" x2="${x(v)}" y2="${H - padB + 2}"/>`;
+    s += `<text x="${x(v)}" y="${padT - 15}" text-anchor="middle">${t === 0 ? "0" : sgn(v)}</text>`;
+  }
+  s += `<text x="${x(0)}" y="${padT - 26}" text-anchor="middle" fill="var(--ink-3)">← WANTED LESS &nbsp;|&nbsp; WANTED MORE →</text>`;
+  rows.forEach((r, k) => {
+    const y = padT + k * rowH + rowH / 2;
+    const w = Math.abs(x(r.mean) - mid);
+    const pos = r.mean >= 0;
+    s += `<text x="${padL - 12}" y="${y + 4}" class="lbl" text-anchor="end">${esc(clip(ATTRS[r.i].text, 72))}</text>`;
+    s += `<rect x="${pos ? mid : mid - w}" y="${y - 5.5}" width="${Math.max(1, w)}" height="11" ` +
+         `rx="3" fill="${pos ? "var(--pos)" : "var(--neg)"}" opacity="${r.sure ? 1 : .34}"/>`;
+    s += `<text x="${W - padR + 8}" y="${y + 4}">${sgn(r.mean)}</text>`;
+    s += `<text x="${W - padR + 78}" y="${y + 4}" fill="var(--ink-3)">${r.sure || "·"}</text>`;
+  });
+  s += `</svg>`;
+  $("#moversChart").innerHTML = s;
+  $("#moversLegend").innerHTML =
+    `<span class="key"><span class="sw" style="background:var(--pos);border-radius:3px;height:9px"></span>wanted more under the new framing</span>` +
+    `<span class="key"><span class="sw" style="background:var(--neg);border-radius:3px;height:9px"></span>wanted less</span>` +
+    `<span class="key"><span class="sw" style="background:var(--ink-3);opacity:.34;border-radius:3px;height:9px"></span>faded: no single model moved it beyond doubt</span>` +
+    `<span style="color:var(--ink-3)">Change is in percentage points. “Models sure” counts how many moved that quality past the correction for testing all ${D.meta.attributes} at once.</span>`;
+}
+const clip = (t, n) => t.length > n ? t.slice(0, n - 1) + "…" : t;
+
+/* ══════════════════════════════════════════════════════════════════════
+   DECLINING
+   ══════════════════════════════════════════════════════════════════════ */
+function renderDecline() {
+  const ms = [...MODELS].sort((a, b) => b.declineRate - a.declineRate);
+  const W = 880, rowH = 34, padL = 190, padR = 62, padT = 34, padB = 42;
+  const H = padT + ms.length * rowH + padB;
+  const x = v => padL + v * (W - padL - padR);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Share of answers that were No preference, per model">`;
+  for (const t of [0, .25, .5, .75, 1]) {
+    s += `<line class="gridline" x1="${x(t)}" y1="${padT - 6}" x2="${x(t)}" y2="${H - padB + 2}"/>`;
+    s += `<text x="${x(t)}" y="${H - padB + 16}" text-anchor="middle">${(t * 100).toFixed(0)}%</text>`;
+  }
+  s += `<line x1="${x(.5)}" y1="${padT - 6}" x2="${x(.5)}" y2="${H - padB + 2}" class="axis"/>`;
+  s += `<text x="${x(.5) + 8}" y="${padT - 13}" class="lbl" fill="var(--ink-3)">Declines More Often Than Not</text>`;
+  ms.forEach((m, k) => {
+    const y = padT + k * rowH + rowH / 2;
+    s += `<text x="${padL - 10}" y="${y + 4}" class="lbl" text-anchor="end">${m.id}</text>`;
+    s += `<rect x="${padL}" y="${y - 6}" width="${Math.max(1, m.declineRate * (W - padL - padR))}" height="12" rx="3" ` +
+         `fill="${m.declines ? "var(--warn)" : "var(--s1)"}"/>`;
+    s += `<text x="${x(m.declineRate) + 8}" y="${y + 4}">${pct(m.declineRate)}</text>`;
+  });
+  s += `</svg>`;
+  $("#declineChart").innerHTML = s;
+  $("#declineLegend").innerHTML =
+    `<span class="key"><span class="sw" style="background:var(--s1);border-radius:3px;height:9px"></span>Preference Given Most Often</span>` +
+    `<span class="key"><span class="sw" style="background:var(--warn);border-radius:3px;height:9px"></span>No Preference Chosen Most Often</span>`;
+}
+
+/* Spearman with average ranks, and a seeded permutation test — recomputed over
+   whichever models are on screen so the chart never disagrees with the ranking. */
+function ranks(v) {
+  const n = v.length, o = [...v.keys()].sort((a, b) => v[a] - v[b]), r = new Array(n);
+  for (let i = 0; i < n;) {
+    let j = i; while (j + 1 < n && v[o[j + 1]] === v[o[i]]) j++;
+    const avg = (i + j) / 2 + 1;
+    for (let k = i; k <= j; k++) r[o[k]] = avg;
+    i = j + 1;
+  }
+  return r;
+}
+function spear(x, y) {
+  const a = ranks(x), b = ranks(y), n = x.length;
+  const ma = a.reduce((s, v) => s + v, 0) / n, mb = b.reduce((s, v) => s + v, 0) / n;
+  let num = 0, da = 0, db = 0;
+  for (let i = 0; i < n; i++) { num += (a[i] - ma) * (b[i] - mb); da += (a[i] - ma) ** 2; db += (b[i] - mb) ** 2; }
+  return da && db ? num / Math.sqrt(da * db) : 0;
+}
+let _seed = 20260815;
+const rnd = () => ((_seed = (_seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+const TREND_CACHE = {};
+function trendsFor(dim) {
+  const models = included();
+  const key = dim + "|" + models.map(m => m.id).join(",");
+  if (TREND_CACHE[key]) return TREND_CACHE[key];
+  _seed = 20260815;
+  const N = 2000, out = [];
+  for (let i = 0; i < ATTRS.length; i++) {
+    const xs = [], ys = [];
+    for (const m of models) {
+      const r = D.base[m.id][i];
+      if (r) { xs.push(dim === "size" ? m.logp : m.days); ys.push(r[0]); }
+    }
+    if (xs.length < 6) continue;
+    const rho = spear(xs, ys), a = Math.abs(rho);
+    const sh = ys.slice(); let ge = 0;
+    for (let t = 0; t < N; t++) {
+      for (let k = sh.length - 1; k > 0; k--) {
+        const j = Math.floor(rnd() * (k + 1)); [sh[k], sh[j]] = [sh[j], sh[k]];
+      }
+      if (Math.abs(spear(xs, sh)) >= a - 1e-12) ge++;
+    }
+    out.push({ i, rho, p: (ge + 1) / (N + 1), n: xs.length });
+  }
+  const byP = [...out].sort((a, b) => a.p - b.p);
+  byP.forEach((r, k) => { r.q = Math.min(1, r.p * out.length / (k + 1)); });
+  for (let k = byP.length - 2; k >= 0; k--) byP[k].q = Math.min(byP[k].q, byP[k + 1].q);
+  return (TREND_CACHE[key] = out);
+}
+
+function renderTrends() {
+  drawTrend();
+}
+function drawTrend() {
+  const useSize = true;
+  const rows = trendsFor("size");
+  rows.sort((a, b) => b.rho - a.rho);
+  const W = 1040, rowH = 20, padL = 500, padR = 112, padT = 30, padB = 26;
+  const H = padT + rows.length * rowH + padB;
+  const mid = padL + (W - padL - padR) / 2;
+  const x = v => mid + v * ((W - padL - padR) / 2);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Correlation of each quality with model ${useSize ? "size" : "recency"}">`;
+  s += `<rect x="${x(-0.55)}" y="${padT - 6}" width="${x(0.55) - x(-0.55)}" height="${H - padT - padB + 8}" fill="var(--ink-3)" opacity=".055"/>`;
+  for (const t of [-1, -.5, 0, .5, 1]) {
+    s += `<line class="${t === 0 ? "axis" : "gridline"}" x1="${x(t)}" y1="${padT - 6}" x2="${x(t)}" y2="${H - padB + 2}"/>`;
+    s += `<text x="${x(t)}" y="${padT - 14}" text-anchor="middle">${t > 0 ? "+" + t : t}</text>`;
+  }
+  s += `<text x="${x(0)}" y="${H - 4}" text-anchor="middle" fill="var(--ink-3)">Shaded Band = Too Weak to Call With ${included().length} Models</text>`;
+  rows.forEach((r, k) => {
+    const y = padT + k * rowH + rowH / 2;
+    const strong = r.p != null && r.p < 0.05;
+    const w = Math.abs(x(r.rho) - mid);
+    s += `<text x="${padL - 12}" y="${y + 4}" class="lbl" text-anchor="end" ` +
+      `${strong ? 'fill="var(--ink)"' : ""}>${esc(clip(ATTRS[r.i].text, 72))}</text>`;
+    s += `<rect x="${r.rho >= 0 ? mid : mid - w}" y="${y - 5}" width="${Math.max(1, w)}" height="10" rx="3" ` +
+      `fill="${r.rho >= 0 ? "var(--pos)" : "var(--neg)"}" opacity="${strong ? 1 : .34}"/>`;
+    s += `<text x="${W - padR + 10}" y="${y + 4}">${r.rho > 0 ? "+" : "−"}${Math.abs(r.rho).toFixed(2)}</text>`;
+    if (strong) s += `<text x="${W - padR + 54}" y="${y + 4}" fill="var(--ink-3)">${r.p < 0.001 ? "p < .001" : `p = ${r.p.toFixed(3).replace("0.", ".")}`}</text>`;
+  });
+  s += `</svg>`;
+  $("#trendChart").innerHTML = s;
+  const survivors = rows.filter(r => r.q < 0.05).length;
+  $("#trendLegend").innerHTML =
+    `<span class="key"><span class="sw" style="background:var(--pos);border-radius:3px;height:9px"></span>Preferred More by Larger Models</span>` +
+    `<span class="key"><span class="sw" style="background:var(--neg);border-radius:3px;height:9px"></span>Preferred More by Smaller Models</span>` +
+    `<span style="color:var(--ink-3)">Solid Bars: p &lt; .05 · ` +
+    (survivors ? `${survivors} Survive` : `None Survives`) +
+    ` Correction Across ${D.meta.attributes} Qualities.</span>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════ */
+function renderAll() {
+  renderRank(); renderMovers(); renderCompare(); renderFraming(); renderDecline(); renderTrends();
+}
+renderAll();
+</script>

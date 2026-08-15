@@ -357,6 +357,22 @@ models:
     size_tier: medium
     latest_in_family: true
 
+  - alias: Qwen3.8-27B
+    family: qwen
+    generation: qwen3.8
+    release_date: "2026-08-13"
+    in_window: true
+    kind: instruct
+    params_total_b: 27
+    params_active_b: 27
+    backend: llamacpp
+    ref: unsloth/Qwen3.8-27B-GGUF
+    hf_id: Qwen/Qwen3.8-27B
+    quantization: {format: gguf, quant: Q4_K_M}
+    methods: [sample, logprob]
+    size_tier: medium
+    latest_in_family: true
+
   # base variants — Qwen3.6 shipped no Base checkpoints, so the newest
   # available base tier is Qwen3.5. Flagged so the write-up says so.
   - alias: Qwen3.5-4B-Base
