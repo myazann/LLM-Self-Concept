@@ -739,6 +739,13 @@ class OpenAIAdapter(ModelAdapter):
     supports_sample = True
     supports_logprob = True
 
+    # Generations whose reasoning floor is a true OFF. GPT-5.6 replaced the old
+    # "minimal" level with "none" and REJECTS "minimal" outright (400), so this
+    # is not a nicety: sending the old value to a 5.6 model fails every call.
+    # Earlier generations keep "minimal", which is a floor rather than off — the
+    # difference is recorded per row in `applied`/`standardized`.
+    _EFFORT_NONE_GENERATIONS = frozenset({"gpt-5.6"})
+
     def __init__(self, spec: ModelSpec):
         super().__init__(spec)
         try:
@@ -759,17 +766,22 @@ class OpenAIAdapter(ModelAdapter):
     def reasoning_plan(self, want_thinking: bool) -> ReasoningPlan:
         """GPT-5.x are reasoning models controlled by `reasoning_effort`.
 
-        Caveat: the floor is "minimal", not off — GPT cannot fully disable
-        reasoning, so rating_only reaches the model's minimum, not zero. That is
-        recorded in `applied` and flagged in the README.
+        The off-level differs by generation. GPT-5.6 has "none", which is a real
+        zero — no reasoning tokens are produced — so rating_only reaches the same
+        latent state there as thinking-disabled does on Claude. Earlier GPT
+        generations only go down to "minimal", a floor rather than off, so their
+        rating_only rows are marked `standardized=False`: the factor did not
+        reach the intended state, and the reasoning contrast has to carry that.
         """
-        effort = "high" if want_thinking else "minimal"
+        off = ("none" if self.spec.generation in self._EFFORT_NONE_GENERATIONS
+               else "minimal")
+        effort = "high" if want_thinking else off
         mt = self.spec.max_output_tokens_reasoning if want_thinking else self.spec.max_output_tokens
         return ReasoningPlan(
             want_thinking,
             kwargs={"reasoning_effort": effort},
             applied=f"reasoning_effort={effort}",
-            standardized=True,   # best achievable; "minimal" is the floor, not off
+            standardized=(want_thinking or off == "none"),
             max_tokens=mt,
         )
 

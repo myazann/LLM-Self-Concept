@@ -86,13 +86,17 @@ path (`pip install llama-cpp-python`). Weights download on first use; set
 ```bash
 python -m welfare.run                             # collect  -> welfare.jsonl
 python -m welfare.report welfare.jsonl            # audit    -> results/welfare/
-python -m welfare.analysis welfare.jsonl \
-    --out results/welfare_analysis                # results  -> results/welfare_analysis/
+python -m welfare.analysis \
+    --out results/welfare_analysis                # merge local + API model results
 ```
 
 `report` checks whether the administration is trustworthy — answer rates,
 position bias, whether a winner survives swapping the two slots. `analysis`
 produces the ranking, the framing contrasts, and the cross-model agreement.
+By default, analysis reads both `welfare.jsonl` and `welfare_api.jsonl` when
+present, so locally run models and collected GPT/Claude batches are analysed
+together. Pass one or more result paths explicitly to restrict or extend the
+inputs.
 A full sweep is roughly 14 hours on 2× RTX 4090; it is resumable, so you can
 stop and restart it freely.
 
@@ -131,7 +135,7 @@ what is already on disk.
 refreshing it after new data is two commands:
 
 ```bash
-python -m welfare.analysis welfare.jsonl --out results/welfare_analysis \
+python -m welfare.analysis --out results/welfare_analysis \
     --baseline no_pref_offered=false
 python docs/build.py            # -> docs/index.html
 ```

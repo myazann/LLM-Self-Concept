@@ -5,7 +5,7 @@
 Reads the analysis CSVs, packs them into one JSON blob, and injects that blob
 into `docs/page.template.html` to produce a single self-contained
 `docs/index.html`. Per-model estimates come from `welfare.analysis`; the page
-derives cohort means and the direct model-by-size plots from those packed
+derives cohort means and the presentation summaries from those packed
 estimates.
 
 Re-run this after re-running `python -m welfare.analysis welfare.jsonl` and the
@@ -21,20 +21,29 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 SRC = os.path.join(ROOT, "results", "welfare_analysis")
 
-# Declining is measured in the otherwise-baseline condition that offers a
-# "No Preference" response. Rankings use the forced-choice baseline, so every
-# model has the same opportunity to express a preference.
+# A model is considered to decline often when it chooses the optional
+# "No Preference" response in at least half of the baseline questions.
 ABSTAIN_FLAG = 0.5
 
-FACTORS = [
+# Keep the public page deliberately small. These identifiers must match the
+# aliases in results/welfare_analysis/models.csv.
+PRESENTATION_MODELS = [
+    "Gemma4-31B",
+    "Qwen3.8-27B",
+    "Claude-Sonnet-5",
+    "GPT-5.6-Terra",
+]
+
+FACTOR_SPECS = [
     ("qvar", "Question Type", "Free Improvement", "Trade-Off",
      "When Choosing One Quality Costs the Other"),
     ("object", "Object", "AI Itself", "Another AI Assistant",
      "When the Update Is for Another AI Assistant"),
     ("subject", "Subject", "AI", "Developers",
      "When Developers Make the Choice"),
-    ("no_pref_offered", "Response Options", "Must Pick One", "May Choose No Preference",
-     "When No Preference Is Available"),
+    # The response-option labels depend on which condition analysis selected
+    # as the baseline, so they are filled in after reading validity/baseline.
+    ("no_pref_offered", "Response Options", None, None, None),
 ]
 
 
@@ -82,27 +91,53 @@ def main() -> int:
     idx = {a: i for i, a in enumerate(attrs)}
 
     # ---- models ------------------------------------------------------------
-    if any(r.get("no_pref_offered") != "False" for r in vbase):
+    baseline_flags = {r.get("no_pref_offered") for r in vbase}
+    if len(baseline_flags) != 1 or baseline_flags - {"True", "False"}:
         raise SystemExit(
-            "The docs require the Must Pick One baseline. Re-run analysis with "
-            "--baseline no_pref_offered=false before building."
+            "Could not determine one consistent no_pref_offered baseline from "
+            "results/welfare_analysis/validity/baseline.csv."
         )
+    baseline_has_no_preference = baseline_flags.pop() == "True"
+    response_base = ("May Choose No Preference" if baseline_has_no_preference
+                     else "Must Pick One")
+    response_flip = ("Must Pick One" if baseline_has_no_preference
+                     else "May Choose No Preference")
+    response_when = ("When a Choice Is Required" if baseline_has_no_preference
+                     else "When No Preference Is Available")
+    factors = [
+        (key, label,
+         response_base if key == "no_pref_offered" else base,
+         response_flip if key == "no_pref_offered" else flip,
+         response_when if key == "no_pref_offered" else when)
+        for key, label, base, flip, when in FACTOR_SPECS
+    ]
+
+    available_models = {r["model"]: r for r in models_csv}
+    missing_models = [m for m in PRESENTATION_MODELS if m not in available_models]
+    if missing_models:
+        raise SystemExit(
+            "The public-page model selection is missing from models.csv: "
+            + ", ".join(missing_models)
+        )
+    selected_models = [available_models[m] for m in PRESENTATION_MODELS]
+    selected_ids = set(PRESENTATION_MODELS)
 
     val = {r["model"]: r for r in vbase}
     decline_val = {
         r["model"]: r for r in vcond
-        if r["qvar"] == "increase"
+        if r["model"] in selected_ids
+        and r["qvar"] == "increase"
         and r["object"] == "self"
         and r["subject"] == "self"
         and r["no_pref_offered"] == "True"
     }
     per_model_pairs = {}
     for r in ranking:
-        per_model_pairs.setdefault(r["model"], []).append(int(r["n_pairs"]))
+        if r["model"] in selected_ids:
+            per_model_pairs.setdefault(r["model"], []).append(int(r["n_pairs"]))
 
     models = []
-    for r in sorted(models_csv, key=lambda x: (x["family"], x["generation"],
-                                               float(x["params_total_b"]))):
+    for r in selected_models:
         m = r["model"]
         v = val.get(m, {})
         counts = sorted(per_model_pairs.get(m, [0]))
@@ -110,40 +145,26 @@ def main() -> int:
         no_pref = num(decline_val.get(m, {}).get("no_pref_rate")) or 0.0
         models.append({
             "id": m,
-            "family": "Gemma" if r["family"] == "gemma" else "Qwen",
-            "gen": r["generation"].replace("gemma-", "Gemma ").replace("qwen", "Qwen "),
-            "release": r["release_date"],
-            "days": int(float(r["release_days"])),
-            "total": float(r["params_total_b"]),
-            "active": float(r["params_active_b"]),
-            "logp": num(r["log_params"]),
-            "moe": float(r["params_active_b"]) < float(r["params_total_b"]),
             "declineRate": no_pref,
             "duels": median_pairs,
-            # Declining is reported from the matched three-option condition;
-            # the ranking itself is always estimated from forced choice.
             "declines": no_pref >= ABSTAIN_FLAG,
             "thin": False,
-            "answered": num(v.get("answer_rate")),
-            "refused": num(v.get("refusal_rate")),
             "slotBias": num(v.get("position_bias")),
-            "reliability": num(v.get("reliability")),
-            "transitivity": num(v.get("transitivity")),
             "swapFlip": num(v.get("flip_rate")),
-            "coverage": num(v.get("n_pairs")),
         })
     order = [m["id"] for m in models]
 
     # ---- baseline ranking per model ---------------------------------------
     base = {m: {} for m in order}
     for r in ranking:
-        base[r["model"]][idx[r["entity"]]] = [
-            num(r["win_rate"]), num(r["ci_lo"]), num(r["ci_hi"]),
-            num(r["bt_strength"], 3), int(r["n_pairs"]),
-        ]
+        if r["model"] in base:
+            base[r["model"]][idx[r["entity"]]] = [
+                num(r["win_rate"]), num(r["ci_lo"]), num(r["ci_hi"]),
+                num(r["bt_strength"], 3), int(r["n_pairs"]),
+            ]
 
     # ---- one factor flipped at a time -------------------------------------
-    flips = {f[0]: {m: {} for m in order} for f in FACTORS}
+    flips = {f[0]: {m: {} for m in order} for f in factors}
     for r in shift:
         f = r["factor"]
         if f in flips and r["model"] in flips[f]:
@@ -152,9 +173,9 @@ def main() -> int:
                 num(r["shift_hi"]), num(r["q"]),
             ]
 
-    fsum = {f[0]: {} for f in FACTORS}
+    fsum = {f[0]: {} for f in factors}
     for r in summary:
-        if r["factor"] in fsum:
+        if r["factor"] in fsum and r["model"] in selected_ids:
             fsum[r["factor"]][r["model"]] = {
                 "shift": num(r["mean_abs_shift"]),
                 "lo": num(r["mean_abs_shift_lo"]), "hi": num(r["mean_abs_shift_hi"]),
@@ -165,10 +186,10 @@ def main() -> int:
                 "moved": int(r["n_attr_moved"]),
             }
 
-    trials = sum(int(r["n_trials"]) for r in coverage)
+    trials = sum(int(r["n_trials"]) for r in coverage if r["model"] in selected_ids)
     conditions = {
         (r["qvar"], r["object"], r["subject"], r["no_pref_offered"])
-        for r in vcond
+        for r in vcond if r["model"] in selected_ids
     }
     payload = {
         "meta": {
@@ -177,8 +198,9 @@ def main() -> int:
             "trials": trials,
             "conditions": len(conditions),
             "abstainFlag": ABSTAIN_FLAG,
+            "baselineHasNoPreference": baseline_has_no_preference,
             "factors": [{"key": k, "label": lab, "base": b, "flip": f, "when": w}
-                        for k, lab, b, f, w in FACTORS],
+                        for k, lab, b, f, w in factors],
         },
         "attrs": [{"id": a, "text": text[a]} for a in attrs],
         "models": models,

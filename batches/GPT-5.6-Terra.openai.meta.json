@@ -1,0 +1,24 @@
+{
+  "model_id": "GPT-5.6-Terra",
+  "model_ref": "gpt-5.6-terra",
+  "backend": "openai",
+  "endpoint": "/v1/chat/completions",
+  "module": "welfare",
+  "config_hash": "8783670dc481d540",
+  "cells_planned": 31744,
+  "cells_skipped_already_done": 0,
+  "requests_written": 31744,
+  "files": [
+    {
+      "path": "batches/GPT-5.6-Terra.openai.batch.jsonl",
+      "requests": 31744,
+      "bytes": 21526400
+    }
+  ],
+  "reasoning_applied": "reasoning_effort=none",
+  "reasoning_standardized": true,
+  "max_tokens": 512,
+  "temperature_sent": null,
+  "temperature_recorded": 1.0,
+  "generated_at": "2026-08-15T17:32:45.308277+00:00"
+}

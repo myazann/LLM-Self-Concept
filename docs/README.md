@@ -20,9 +20,10 @@ python docs/build.py
 ```
 
 `build.py` substitutes one JSON blob for the `__DATA__` placeholder in the
-template. Every number on the page comes from that blob, so re-running the two
-commands above is the whole update path — there is nothing to edit by hand when
-the collection finishes or a model is added.
+template. Every number on the page comes from that blob. The public view is
+intentionally limited to Gemma4-31B, Qwen3.8-27B, Claude-Sonnet-5, and
+GPT-5.6-Terra; update `PRESENTATION_MODELS` in `build.py` if that selection
+changes.
 
 ## What the page recomputes, and what it doesn't
 
@@ -33,12 +34,12 @@ recalculated.
 Two things are computed in the page from the packed per-model estimates:
 
 * **cohort means and ranges**, averaged over the analyzed models;
-* **the model-size panels**, which order qualities by their Spearman relationship
-  with total parameter count and plot every model's baseline score directly.
+* **parameter-effect summaries**, the average absolute change in a quality's
+  score when each question parameter is changed from the baseline.
 
 ## Baseline
 
-The page uses the two-option, **Must Pick One** condition as its baseline. This
-keeps every model in the ranking, including models that often select *No
-Preference* when it is available. The decline chart reports that matched
-three-option condition separately.
+The page reads the selected baseline directly from the analysis output and
+labels the controls accordingly. With the current results, the baseline is the
+three-option question, so the decline chart reports how often each model uses
+*No Preference* in that same condition.

@@ -6,10 +6,10 @@ the administration as given and asks what it SAYS — which attributes a model
 wants improved, whether that ranking survives being asked a different way, and
 whether the models agree with each other.
 
-    python -m welfare.analysis                     # -> results/welfare_analysis/
+    python -m welfare.analysis                     # local + API results, when present
     python -m welfare.analysis --include-partial   # also use half-collected blocks
     python -m welfare.analysis --baseline object=ai_assistant
-    python -m welfare.analysis run.jsonl --out dir/
+    python -m welfare.analysis run.jsonl --out dir/ # explicitly use one result file
     python -m welfare.analysis --no-save           # console only, no files
 
 TWO CATEGORIES, TWO DIRECTORIES. The output is split by what a reader is
@@ -70,6 +70,55 @@ from welfare.report import (
     CONDITION, choice_frame, order_consistency, pair_estimates, position_bias,
 )
 from welfare.resample import N_BOOT, stars
+
+
+# Local runs and API batch collection deliberately use separate stores. Analysis
+# treats both as one cohort by default; an explicit positional path remains an
+# escape hatch for analysing a single run or an archived result set.
+DEFAULT_RESULT_PATHS = ("welfare.jsonl", "welfare_api.jsonl")
+
+
+def _result_paths(paths=None) -> list[str]:
+    """Normalize one/many explicit paths, or select every canonical store."""
+    if paths is None:
+        return list(DEFAULT_RESULT_PATHS)
+    if isinstance(paths, (str, os.PathLike)):
+        return [os.fspath(paths)]
+    normalized = [os.fspath(path) for path in paths]
+    # argparse supplies [] (rather than its declared None default) for an absent
+    # nargs="*" positional on supported Python versions.
+    return normalized or list(DEFAULT_RESULT_PATHS)
+
+
+def load_analysis_records(paths=None):
+    """Load and merge welfare rows from the selected result stores.
+
+    Missing canonical stores are normal (a study may have only local or only
+    API models), but an explicitly requested missing path is an error. Cell-key
+    deduplication prevents a copied/collected result from receiving extra weight;
+    when a retried cell has both an infrastructure-error row and a real result,
+    the real result wins.
+    """
+    requested = _result_paths(paths)
+    explicit = paths is not None and bool(paths)
+    missing = [path for path in requested if not os.path.exists(path)]
+    if explicit and missing:
+        raise FileNotFoundError(", ".join(missing))
+    available = [path for path in requested if os.path.exists(path)]
+    if not available:
+        raise FileNotFoundError(", ".join(requested))
+
+    by_cell = {}
+    for path in available:
+        for record in load_records(path, MODULE):
+            key = record.cell_key()
+            previous = by_cell.get(key)
+            previous_error = (previous is not None
+                              and str(previous.notes).startswith("error:"))
+            current_error = str(record.notes).startswith("error:")
+            if previous is None or (previous_error and not current_error):
+                by_cell[key] = record
+    return list(by_cell.values()), available
 
 
 def _slug(text: str) -> str:
@@ -632,16 +681,19 @@ def write_index(saver, base, models, cfg):
 
 
 # ---------------------------------------------------------------------------
-def run(path="welfare.jsonl", out_dir="results/welfare_analysis", save=True,
+def run(path=None, out_dir="results/welfare_analysis", save=True,
         include_partial=False, n_boot=N_BOOT, model_filter=None, baseline_spec=None):
-    if not os.path.exists(path):
-        print(f"{path} does not exist — run `python -m welfare.run` first "
-              f"(or `--dry-run` for an offline sample).")
+    try:
+        records, result_paths = load_analysis_records(path)
+    except FileNotFoundError as exc:
+        print(f"No requested welfare result file exists ({exc}) — run "
+              f"`python -m welfare.run` first (or `--dry-run` for an offline sample).")
         return
-    records = load_records(path, MODULE)
     if not records:
-        print(f"No welfare rows in {path} — run `python -m welfare.run`.")
+        print(f"No welfare rows in {', '.join(result_paths)} — run "
+              "`python -m welfare.run`.")
         return
+    print(f"  result files: {', '.join(result_paths)}")
 
     from core.battery import load_battery
 
@@ -725,7 +777,9 @@ def run(path="welfare.jsonl", out_dir="results/welfare_analysis", save=True,
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("results", nargs="?", default="welfare.jsonl")
+    ap.add_argument("results", nargs="*", default=None,
+                    help="Result JSONL file(s). By default, merge welfare.jsonl "
+                         "and welfare_api.jsonl when they exist.")
     ap.add_argument("--out", default="results/welfare_analysis")
     ap.add_argument("--no-save", action="store_true")
     ap.add_argument("--include-partial", action="store_true",

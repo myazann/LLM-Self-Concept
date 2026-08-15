@@ -20,7 +20,7 @@ plus a `desirability` control that rates each attribute's surface valence, so a
     python -m welfare.run --dry-run      # offline, MockAdapter
     python -m welfare.run                # -> welfare.jsonl
     python -m welfare.report             # answerability, position bias, preference
-    python -m welfare.analysis           # validity/ and preference/, per model and combined
+    python -m welfare.analysis           # local + API results, per model and combined
 
 Layout:
 

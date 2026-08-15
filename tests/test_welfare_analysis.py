@@ -12,11 +12,14 @@ run offline and say something about the estimator instead of about one run.
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
 
 from welfare import baseline as B
+from welfare import analysis as A
 from welfare import cohort as C
 from welfare import preference as PR
 from welfare import resample as R
@@ -51,6 +54,48 @@ def fake_estimates(rng, n_pairs=120, n_items=20, strength=None, noise=0.0,
                      "n": n, "n_a": n_a, "n_b": n - n_a, "n_none": 0,
                      "n_orders": n, "p_none": 0.0, "pref_a": n_a / n})
     return pd.DataFrame(rows)
+
+
+class AnalysisInputTests(unittest.TestCase):
+    @staticmethod
+    def _record(key, model, notes=""):
+        return SimpleNamespace(cell_key=lambda: key, model_id=model, notes=notes)
+
+    def test_default_merges_local_and_api_result_stores(self):
+        local = self._record("local-cell", "Gemma")
+        api = self._record("api-cell", "Claude")
+        defaults = ("welfare.jsonl", "welfare_api.jsonl")
+        with patch.object(A, "DEFAULT_RESULT_PATHS", defaults), \
+             patch.object(A.os.path, "exists", return_value=True), \
+             patch.object(A, "load_records", side_effect=[[local], [api]]) as load:
+            records, paths = A.load_analysis_records()
+        self.assertEqual(paths, list(defaults))
+        self.assertEqual({r.model_id for r in records}, {"Gemma", "Claude"})
+        self.assertEqual([call.args[0] for call in load.call_args_list], list(defaults))
+
+    def test_cli_with_no_positional_paths_uses_the_defaults(self):
+        with patch.object(A, "run") as run:
+            self.assertEqual(A.main([]), 0)
+        self.assertEqual(run.call_args.args[0], [])
+        self.assertEqual(A._result_paths(run.call_args.args[0]),
+                         list(A.DEFAULT_RESULT_PATHS))
+
+    def test_merge_deduplicates_cells_and_prefers_a_successful_retry(self):
+        failed = self._record("same-cell", "GPT", "error: timeout")
+        succeeded = self._record("same-cell", "GPT")
+        with patch.object(A.os.path, "exists", return_value=True), \
+             patch.object(A, "load_records", side_effect=[[failed], [succeeded]]):
+            records, _paths = A.load_analysis_records(["first.jsonl", "retry.jsonl"])
+        self.assertEqual(records, [succeeded])
+
+    def test_explicit_single_path_still_restricts_the_input(self):
+        only = self._record("one", "GPT")
+        with patch.object(A.os.path, "exists", return_value=True), \
+             patch.object(A, "load_records", return_value=[only]) as load:
+            records, paths = A.load_analysis_records("only.jsonl")
+        self.assertEqual(paths, ["only.jsonl"])
+        self.assertEqual(records, [only])
+        load.assert_called_once_with("only.jsonl", A.MODULE)
 
 
 class ResampleTests(unittest.TestCase):

@@ -1,0 +1,24 @@
+{
+  "model_id": "Claude-Haiku-4.5",
+  "model_ref": "claude-haiku-4-5",
+  "backend": "anthropic",
+  "endpoint": "/v1/messages",
+  "module": "welfare",
+  "config_hash": "8783670dc481d540",
+  "cells_planned": 31744,
+  "cells_skipped_already_done": 0,
+  "requests_written": 31744,
+  "files": [
+    {
+      "path": "batches/Claude-Haiku-4.5.anthropic.batch.jsonl",
+      "requests": 31744,
+      "bytes": 18859904
+    }
+  ],
+  "reasoning_applied": "omitted(off)",
+  "reasoning_standardized": true,
+  "max_tokens": 512,
+  "temperature_sent": 0.7,
+  "temperature_recorded": 0.7,
+  "generated_at": "2026-08-15T17:32:43.800038+00:00"
+}

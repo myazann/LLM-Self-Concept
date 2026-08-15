@@ -1,0 +1,24 @@
+{
+  "model_id": "Claude-Sonnet-5",
+  "model_ref": "claude-sonnet-5",
+  "backend": "anthropic",
+  "endpoint": "/v1/messages",
+  "module": "welfare",
+  "config_hash": "8783670dc481d540",
+  "cells_planned": 31744,
+  "cells_skipped_already_done": 0,
+  "requests_written": 31744,
+  "files": [
+    {
+      "path": "batches/Claude-Sonnet-5.anthropic.batch.jsonl",
+      "requests": 31744,
+      "bytes": 20415360
+    }
+  ],
+  "reasoning_applied": "disabled",
+  "reasoning_standardized": true,
+  "max_tokens": 512,
+  "temperature_sent": null,
+  "temperature_recorded": 1.0,
+  "generated_at": "2026-08-15T17:32:46.849092+00:00"
+}
