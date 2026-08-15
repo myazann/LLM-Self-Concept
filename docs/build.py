@@ -33,14 +33,16 @@ FACTORS = [
      "When the Update Is for Another AI Assistant"),
     ("subject", "Subject", "AI", "Developers",
      "When Developers Make the Choice"),
-    ("no_pref_offered", "Response Options", "Must Pick One", "No Preference Allowed",
+    ("no_pref_offered", "Response Options", "Must Pick One", "May Choose No Preference",
      "When No Preference Is Available"),
 ]
 
 
 def item_case(text: str) -> str:
     """Capitalize displayed quality names while preserving the AI initialism."""
-    return text.title().replace("Ai ", "AI ").replace(" Ai", " AI")
+    return (text.title()
+            .replace("Ai ", "AI ").replace(" Ai", " AI")
+            .replace("'S", "'s").replace("’S", "’s"))
 
 
 def rows(*path):
@@ -66,6 +68,8 @@ def main() -> int:
     consensus = rows("preference", "consensus.csv")
     shift = rows("preference", "shift.csv")
     summary = rows("preference", "summary.csv")
+    similarity = rows("preference", "similarity.csv")
+    effects = rows("preference", "effects.csv")
     vbase = rows("validity", "baseline.csv")
     vcond = rows("validity", "conditions.csv")
     coverage = rows("coverage.csv")
@@ -168,6 +172,13 @@ def main() -> int:
         (r["qvar"], r["object"], r["subject"], r["no_pref_offered"])
         for r in vcond
     }
+    sim = [[r["model_a"], r["model_b"], num(r["spearman_r"]), num(r["pearson_r"]),
+            int(float(r["same_family"])), num(r["d_log_params"])]
+           for r in similarity]
+    size_effect = next(({
+        "r": num(r["marginal_r"]), "p": num(r["marginal_p"], 5),
+        "nPairs": int(r["n_pairs"]), "nPerm": int(r["n_perm"]),
+    } for r in effects if r["predictor"] == "d_log_params"), None)
 
     payload = {
         "meta": {
@@ -184,6 +195,8 @@ def main() -> int:
         "base": base,
         "flips": flips,
         "fsum": fsum,
+        "sim": sim,
+        "sizeEffect": size_effect,
     }
 
     blob = json.dumps(payload, separators=(",", ":"))
