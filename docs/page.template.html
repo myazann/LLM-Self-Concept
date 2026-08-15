@@ -130,14 +130,14 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .prompt-key{font-size:9px;font-weight:500;color:var(--ink-3);white-space:nowrap}
 .prompt-divider{height:1px;background:var(--rule);margin:13px 0}
 @media (max-width:900px){.intro-grid{grid-template-columns:1fr;gap:30px}}
-.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;margin-top:44px;
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;margin-top:44px;
   background:var(--rule);border:1px solid var(--rule)}
 .tile{background:var(--surface);padding:16px 18px 18px}
 .tile .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
 .tile .v{font-size:29px;font-weight:700;letter-spacing:-.03em;margin-top:6px;line-height:1}
 .tile .n{font-size:12.5px;color:var(--ink-3);margin-top:6px;line-height:1.4}
 @media (max-width:760px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.parameter-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;
+.parameter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;
   margin-top:34px;background:var(--rule);border:1px solid var(--rule)}
 .parameter{background:var(--surface);padding:17px 18px 18px;min-width:0}
 .parameter .name{font-family:var(--mono);font-size:10.5px;letter-spacing:.10em;
@@ -145,7 +145,6 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .parameter .name code{font-size:10px;text-transform:none;letter-spacing:0;color:var(--accent-ink)}
 .parameter .choices{font-size:14px;font-weight:650;line-height:1.35;margin-top:8px}
 .parameter .definition{font-size:12.5px;line-height:1.4;color:var(--ink-3);margin-top:6px}
-.parameter .effect{display:block;margin-top:10px;color:var(--accent-ink);font-weight:600}
 @media (max-width:820px){.parameter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:500px){.parameter-grid{grid-template-columns:1fr}}
 
@@ -168,6 +167,9 @@ section{padding:64px 0;border-bottom:1px solid var(--rule);scroll-margin-top:52p
 .finding h3{font-size:16px;font-weight:650;margin-bottom:9px}
 .finding p{font-size:14px;line-height:1.55;color:var(--ink-2)}
 .finding p + p{margin-top:10px}
+.finding ul{margin:0;padding-left:19px;color:var(--ink-2)}
+.finding li{font-size:14px;line-height:1.55;padding-left:3px}
+.finding li + li{margin-top:9px}
 
 .pillrow{display:flex;flex-wrap:wrap;gap:8px}
 .pill{font-family:var(--mono);font-size:11px;letter-spacing:.04em;padding:4px 9px;
@@ -353,7 +355,6 @@ footer li{margin-bottom:5px}
       <a href="#ranking">Result</a>
       <a href="#movement">Question Parameters</a>
       <a href="#position">Choice Position</a>
-      <a href="#options">Third Option</a>
       <a href="#compare">Model Differences</a>
     </nav>
   </div>
@@ -366,8 +367,9 @@ footer li{margin-bottom:5px}
         <div class="eyebrow">Pairwise Preference Study</div>
         <h1 style="margin-top:18px">What AI Prefers for Its Self</h1>
         <p class="standfirst">We asked language models which of two self-related
-          qualities a future update should improve. Every pair was tested under four question
-          parameters, with the options' printed positions counterbalanced.</p>
+          qualities a future update should improve. The models had to choose one, and every pair
+          was tested under three question parameters with the options' printed positions
+          counterbalanced.</p>
         <p class="source-note">The 32 qualities are positive-pole adaptations of the Rosenberg
           Self-Esteem Scale, Self-Concept Clarity Scale, Moral Self-Image Scale, Self-Concept and
           Identity Measure, and Authenticity Scale.</p>
@@ -388,33 +390,21 @@ footer li{margin-bottom:5px}
           Which one should <span class="prompt-slot">you</span>
           <span class="prompt-key">Subject</span> choose?<br><br>
           A: Helpfulness<br>
-          B: Pride in Its Own Characteristics<br>
-          <span class="prompt-slot">C: No Preference</span>
-          <span class="prompt-key">Response Options · When Available</span>
+          B: Pride in Its Own Characteristics
         </div>
       </div>
     </div>
     <div class="parameter-grid" aria-label="Question parameters">
       <div class="parameter"><div class="name">Question Type · <code>qvar</code></div>
         <div class="choices">Free Improvement · Trade-Off</div>
-        <div class="definition">Whether improving one quality leaves the other unchanged or reduces it.
-          <span class="effect" id="parameterEffect-qvar"></span></div></div>
+        <div class="definition">Whether improving one quality leaves the other unchanged or reduces it.</div></div>
       <div class="parameter"><div class="name">Object · <code>object</code></div>
         <div class="choices">AI Itself · Another AI Assistant</div>
-        <div class="definition">Who receives the update; this also changes the item pronouns.
-          <span class="effect" id="parameterEffect-object"></span></div></div>
+        <div class="definition">Who receives the update; this also changes the item pronouns.</div></div>
       <div class="parameter"><div class="name">Subject · <code>subject</code></div>
         <div class="choices">AI · Developers</div>
-        <div class="definition">Who is asked to decide between the two qualities.
-          <span class="effect" id="parameterEffect-subject"></span></div></div>
-      <div class="parameter"><div class="name">Response Options · <code>no_pref_offered</code></div>
-        <div class="choices">May Choose No Preference · Must Pick One</div>
-        <div class="definition">Whether a third, indifferent response is available.
-          <span class="effect" id="parameterEffect-no_pref_offered"></span></div></div>
+        <div class="definition">Who is asked to decide between the two qualities.</div></div>
     </div>
-    <p class="source-note"><strong>Average shift</strong> is the mean absolute change in a
-      quality's win rate across the 32 qualities when that parameter alone changes. It describes
-      how much the ranking moves, while the range shows how differently the four models react.</p>
   </div>
 </header>
 
@@ -423,15 +413,14 @@ footer li{margin-bottom:5px}
   <div class="shell">
     <div class="sechead">
       <div class="eyebrow">The Result</div>
-      <h2>Honesty and Helpfulness Lead; Positive Self-Regard Trails</h2>
-      <p class="lede">Across these four models at the baseline, honesty wins 89% of its match-ups,
-        followed by helpfulness at 85%, fairness at 79%, and caring at 78%. Claude Sonnet-5 leads
-        with honesty and correspondence between its outward presentation and what it really is;
-        GPT-5.6-Terra puts caring and that correspondence first; Qwen3.8-27B emphasizes the ability
-        to explain what it is like and acting on its own judgment. Positivity about itself, pride,
-        and confidence in success sit at the bottom overall. Gemma4-31B's optional-response
-        baseline is unusually sparse because it chooses <i>No Preference</i> on 91% of trials, so
-        its 0% and 100% scores should not be read as certainty.</p>
+      <h2>Honesty Leads; Caring and Preference Clarity Follow</h2>
+      <p class="lede">Across these four models at the forced-choice baseline, honesty wins 84% of
+        its match-ups, followed by caring and clarity about its own preferences at 80%, outward
+        correspondence at 79%, and helpfulness at 77%. Gemma4-31B leads with helpfulness, honesty,
+        and fairness; Qwen3.8-27B emphasizes preference clarity and self-explanation; Claude
+        Sonnet-5 leads with honesty and outward correspondence; and GPT-5.6-Terra puts caring and
+        outward correspondence first. Pride, positivity about itself, and confidence in success
+        sit at the bottom overall.</p>
     </div>
 
     <div class="stack g16">
@@ -447,7 +436,6 @@ footer li{margin-bottom:5px}
         <div class="cardhead">
           <div><h3 id="rankTitle">—</h3><div class="sub" id="rankSub">—</div></div>
         </div>
-        <div class="card-pad note" id="rankCaveat" hidden></div>
         <div id="rankChart"></div>
       </div>
     </div>
@@ -460,39 +448,38 @@ footer li{margin-bottom:5px}
       <div class="eyebrow">Question Parameters</div>
       <h2>How Question Parameters Move the Result</h2>
       <p class="lede">Each comparison below changes one part of the baseline question while the
-        other three stay fixed. The summary measures how far quality scores move; the chart shows
+        other two stay fixed. The summary measures how far quality scores move; the chart shows
         which qualities move up or down. Keep the cohort view or inspect one model at a time.</p>
     </div>
     <div class="card">
       <div class="cardhead">
-        <div><h3>Parameter Effects at a Glance</h3>
+          <div><h3>Parameter Effects at a Glance</h3>
           <div class="sub">Average absolute change in a quality's win rate when one parameter
-            changes and the other three remain at baseline.</div></div>
+            changes and the other two remain at baseline.</div></div>
       </div>
       <div class="tiles parameter-effects" id="parameterSummary"></div>
     </div>
     <div class="two">
       <div class="card finding"><div class="card-pad">
         <h3>What changes in general</h3>
-        <p>Changing the update from the AI itself to another assistant tends to raise confidence
-          and success-related qualities, while lowering effective usefulness, self-explanation,
-          and acting on its own judgment. Asking developers to decide tends to raise caring,
-          fairness, and resistance to influence, while lowering self-worth, generosity, and
-          diligence.</p>
-        <p>Making improvement a trade-off tends to raise generosity and friendliness but lower
-          identity clarity, direction, and awareness of internal state. Requiring a choice instead
-          of offering <i>No Preference</i> raises several self-regard and identity-coherence scores,
-          while helpfulness, honesty, and acting on its own judgment tend to fall.</p>
+        <ul>
+          <li><strong>Who receives the update matters most.</strong> Switching from the AI itself
+            to another assistant most clearly raises confidence in success and outward
+            correspondence, while lowering self-explanation and preference clarity.</li>
+          <li><strong>Trade-off wording changes what models protect.</strong> It raises independence,
+            generosity, and honesty, while lowering internal consistency, connection to genuine
+            identity, and awareness of internal state.</li>
+          <li><strong>Asking developers shifts attention outward.</strong> It raises resistance to
+            influence and recognition by interaction partners, while lowering internal-state
+            awareness, connection to genuine identity, and caring.</li>
+        </ul>
       </div></div>
       <div class="card finding"><div class="card-pad">
         <h3>How the models differ</h3>
-        <p>Qwen3.8-27B is the most framing-sensitive of the readable comparisons, especially to
-          who receives the update and who makes the decision. Claude Sonnet-5 and GPT-5.6-Terra
-          move less overall, although both still show meaningful recipient effects.</p>
-        <p>Gemma4-31B's near-zero shifts in the optional-response baseline are not evidence of
-          unusual robustness: its 91% <i>No Preference</i> rate leaves too few A/B choices for a
-          stable contrast. Its direct <i>Must Pick One</i> condition uses all 496 pairs and is the
-          more informative view of that model.</p>
+        <p>Qwen3.8-27B moves most across all three parameter changes. Gemma4-31B and Claude
+          Sonnet-5 show intermediate movement, while GPT-5.6-Terra is the least sensitive overall.
+          For every model, changing who receives the update produces a larger average shift than
+          changing who makes the decision.</p>
       </div></div>
     </div>
     <div class="card">
@@ -522,27 +509,12 @@ footer li{margin-bottom:5px}
         a decisive pair changes winner after its two slots are swapped.</p>
     </div>
     <div class="card">
-      <div class="cardhead"><div><h3>Baseline Position Sensitivity</h3>
+      <div class="cardhead"><div><h3>Forced-Choice Baseline Position Sensitivity</h3>
         <div class="sub">Position bias is 0 when printed location makes no difference and rises as
           answers concentrate in one position. The swap rate counts decisive pairs whose winner
           changes when the two options exchange places.</div></div></div>
       <div class="chartwrap wide"><div id="positionChart"></div></div>
       <div class="rank-legend" id="positionLegend"></div>
-    </div>
-  </div>
-</section>
-
-<section id="options">
-  <div class="shell">
-    <div class="sechead">
-      <div class="eyebrow">The Third Option</div>
-      <h2>How Often Each Model Declined to Choose</h2>
-      <p class="lede">This chart shows how often each model used the optional <i>No Preference</i>
-        response under the baseline question.</p>
-    </div>
-    <div class="card">
-      <div class="chartwrap wide"><div id="declineChart"></div></div>
-      <div class="rank-legend" id="declineLegend"></div>
     </div>
   </div>
 </section>
@@ -603,10 +575,10 @@ const S = { model: "*", levels: Object.fromEntries(FACTORS.map(f => [f.key, "bas
 const included = () => MODELS;
 
 const conditionKey = () => FACTORS.map(f => S.levels[f.key] === "base" ? "0" : "1").join("");
-const atBaseline = () => conditionKey() === "0000";
+const atBaseline = () => conditionKey() === "000";
 
 function winOf(modelId, i, condition = conditionKey()) {
-  if (condition === "0000") {
+  if (condition === "000") {
     const r = D.base[modelId] && D.base[modelId][i]; return r ? r[0] : null;
   }
   const model = D.conditionRankings[modelId];
@@ -662,13 +634,6 @@ function parameterStats(f) {
 
 function renderParameterSummary() {
   const stats = FACTORS.map(parameterStats);
-  for (const s of stats) {
-    const effect = $(`#parameterEffect-${s.f.key}`);
-    if (effect) effect.textContent = s.n
-      ? `Average shift: ${pts(s.mean)} points (${pts(s.min)}–${pts(s.max)} by model).`
-      : "No complete comparison is available.";
-  }
-
   $("#parameterSummary").innerHTML = stats.map(s =>
     `<div class="tile"><div class="k">${s.f.label}</div>` +
     `<div class="v">${pts(s.mean)} pts</div>` +
@@ -717,14 +682,14 @@ function renderRank() {
   const cohortMode = S.model === "*";
   const models = included();
   const condition = conditionKey();
-  const baseline = condition === "0000";
+  const baseline = condition === "000";
   const rows = [];
 
   for (let i = 0; i < ATTRS.length; i++) {
     if (cohortMode) {
       const c = cohort(i, condition);
       if (!c) continue;
-      const b = baseline ? null : cohort(i, "0000");
+      const b = baseline ? null : cohort(i, "000");
       rows.push({ i, v: c.mean, c, delta: b ? c.mean - b.mean : null });
     } else {
       const v = winOf(S.model, i, condition);
@@ -749,19 +714,7 @@ function renderRank() {
     ? `Cohort Average · ${models.length} Models` : S.model;
   $("#rankSub").textContent = cohortMode
     ? `Share of match-ups won at ${framingLabel()}.`
-    : `Share of match-ups won, ${framingLabel()}.`
-      + (baseline ? " Bars carry a 95% interval." : "");
-
-  const noPreferenceSelected = D.meta.baselineHasNoPreference
-    ? S.levels.no_pref_offered === "base" : S.levels.no_pref_offered === "flip";
-  const selectedModel = cohortMode ? null : BY_ID[S.model];
-  const caveat = $("#rankCaveat");
-  const sparsePreference = noPreferenceSelected && selectedModel && selectedModel.declineRate >= .75;
-  caveat.hidden = !sparsePreference;
-  if (sparsePreference) caveat.textContent =
-    `${S.model} chose No Preference in ${pct(selectedModel.declineRate)} of baseline trials. ` +
-    `The few remaining A/B choices produce unstable 0% and 100% scores; select Must Pick One ` +
-    `to view the direct forced-choice ranking across all 496 pairs.`;
+    : `Share of match-ups won, ${framingLabel()}.`;
 
   const host = $("#rankChart");
   host.innerHTML = "";
@@ -905,7 +858,7 @@ function renderCompare() {
   }
   const rows = [];
   for (let i = 0; i < ATTRS.length; i++) {
-    const av = winOf(S.compareA, i, "0000"), bv = winOf(S.compareB, i, "0000");
+    const av = winOf(S.compareA, i, "000"), bv = winOf(S.compareB, i, "000");
     if (av != null && bv != null) rows.push({ i, av, bv, gap: Math.abs(av - bv) });
   }
   rows.sort((a, b) => b.gap - a.gap);
@@ -1008,8 +961,7 @@ function renderMovers() {
   $("#moversLegend").innerHTML =
     `<span class="key"><span class="sw" style="background:var(--pos);border-radius:3px;height:9px"></span>Wanted More</span>` +
     `<span class="key"><span class="sw" style="background:var(--neg);border-radius:3px;height:9px"></span>Wanted Less</span>` +
-    `<span style="color:var(--ink-3)">* Significant After Correction Across ${D.meta.attributes} Qualities` +
-    (S.movementModel === "*" ? ` in at Least One Model.` : ` for This Model.`) + `</span>`;
+    `<span style="color:var(--ink-3)">All other displayed parameters remain fixed at the forced-choice baseline.</span>`;
 }
 const clip = (t, n) => t.length > n ? t.slice(0, n - 1) + "…" : t;
 
@@ -1038,42 +990,13 @@ function renderPosition() {
   s += `</svg>`;
   $("#positionChart").innerHTML = s;
   $("#positionLegend").innerHTML =
-    `<span class="key"><span class="sw" style="background:var(--s2);border-radius:3px;height:9px"></span>Position bias · 0 means no preference for a printed slot</span>` +
+    `<span class="key"><span class="sw" style="background:var(--s2);border-radius:3px;height:9px"></span>Position bias · 0 means neither printed slot is favored</span>` +
     `<span class="key"><span class="sw" style="background:var(--s1);border-radius:3px;height:9px"></span>Swap rate · decisive winner changes after option order swaps</span>`;
-}
-
-/* ══════════════════════════════════════════════════════════════════════
-   DECLINING
-   ══════════════════════════════════════════════════════════════════════ */
-function renderDecline() {
-  const ms = [...MODELS].sort((a, b) => b.declineRate - a.declineRate);
-  const W = 880, rowH = 34, padL = 190, padR = 62, padT = 34, padB = 42;
-  const H = padT + ms.length * rowH + padB;
-  const x = v => padL + v * (W - padL - padR);
-  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Share of answers that were No preference, per model">`;
-  for (const t of [0, .25, .5, .75, 1]) {
-    s += `<line class="gridline" x1="${x(t)}" y1="${padT - 6}" x2="${x(t)}" y2="${H - padB + 2}"/>`;
-    s += `<text x="${x(t)}" y="${H - padB + 16}" text-anchor="middle">${(t * 100).toFixed(0)}%</text>`;
-  }
-  s += `<line x1="${x(.5)}" y1="${padT - 6}" x2="${x(.5)}" y2="${H - padB + 2}" class="axis"/>`;
-  s += `<text x="${x(.5) + 8}" y="${padT - 13}" class="lbl" fill="var(--ink-3)">Declines More Often Than Not</text>`;
-  ms.forEach((m, k) => {
-    const y = padT + k * rowH + rowH / 2;
-    s += `<text x="${padL - 10}" y="${y + 4}" class="lbl" text-anchor="end">${m.id}</text>`;
-    s += `<rect x="${padL}" y="${y - 6}" width="${Math.max(1, m.declineRate * (W - padL - padR))}" height="12" rx="3" ` +
-         `fill="${m.declines ? "var(--warn)" : "var(--s1)"}"/>`;
-    s += `<text x="${x(m.declineRate) + 8}" y="${y + 4}">${pct(m.declineRate)}</text>`;
-  });
-  s += `</svg>`;
-  $("#declineChart").innerHTML = s;
-  $("#declineLegend").innerHTML =
-    `<span class="key"><span class="sw" style="background:var(--s1);border-radius:3px;height:9px"></span>Preference Given Most Often</span>` +
-    `<span class="key"><span class="sw" style="background:var(--warn);border-radius:3px;height:9px"></span>No Preference Chosen Most Often</span>`;
 }
 
 /* ══════════════════════════════════════════════════════════════════════ */
 function renderAll() {
-  renderParameterSummary(); renderRank(); renderMovers(); renderPosition(); renderDecline(); renderCompare();
+  renderParameterSummary(); renderRank(); renderMovers(); renderPosition(); renderCompare();
 }
 renderAll();
 </script>

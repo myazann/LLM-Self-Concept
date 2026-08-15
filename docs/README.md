@@ -27,19 +27,18 @@ changes.
 
 ## What the page recomputes, and what it doesn't
 
-Per-model estimates — win rates, intervals, Bradley-Terry strengths, framing
-shifts and their q-values — are read straight from the analysis CSVs and never
-recalculated.
-
-Two things are computed in the page from the packed per-model estimates:
+Per-model, per-condition win rates and forced-choice position metrics are read
+from the analysis CSVs. The page build computes three presentation summaries:
 
 * **cohort means and ranges**, averaged over the analyzed models;
 * **parameter-effect summaries**, the average absolute change in a quality's
-  score when each question parameter is changed from the baseline.
+  score when each question parameter is changed from the baseline;
+* **one-factor quality changes**, calculated by comparing each forced-choice
+  condition with the forced-choice baseline.
 
 ## Baseline
 
-The page reads the selected baseline directly from the analysis output and
-labels the controls accordingly. With the current results, the baseline is the
-three-option question, so the decline chart reports how often each model uses
-*No Preference* in that same condition.
+The public page always uses the forced-choice condition as its baseline and
+packs only those eight configurations (three binary question parameters). The
+optional-response condition remains in the analysis outputs but is not shown
+on the page.
