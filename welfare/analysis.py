@@ -382,7 +382,8 @@ def analyse_preference(model, choices, estimates, base, welfare_set, n_boot,
 
     stamp = lambda df: df.assign(model=model) if not df.empty else df
     return {
-        "ranking": stamp(ranking), "constructs": stamp(constructs),
+        "ranking": stamp(ranking), "conditions": stamp(wins),
+        "constructs": stamp(constructs),
         "agreement": stamp(agree), "shift": stamp(shift),
         "summary": stamp(summary), "construct_shift": stamp(con_shift),
         # Keyed exactly as `condition_reliabilities` keys it: the full condition
@@ -581,6 +582,8 @@ VALIDITY_CSV = {
 PREFERENCE_CSV = {
     "ranking": "per model: baseline win rate with bootstrap CI, Bradley-Terry strength, "
                "rank shift and opponent strength",
+    "conditions": "per model x condition x attribute: direct win rate used by the "
+                  "interactive condition explorer",
     "constructs": "per model: construct rollup of the baseline attribute win rates",
     "agreement": "per model: ranking agreement between all sixteen conditions, vs ceilings",
     "shift": "per model x flip x attribute: change from the baseline, CI, p and BH q",
@@ -749,7 +752,7 @@ def run(path=None, out_dir="results/welfare_analysis", save=True,
     collect = lambda key: [d[key] for d in pref_by_model.values()
                            if d.get(key) is not None and not d[key].empty]
     preference_frames = {}
-    for key in ("ranking", "constructs", "agreement", "shift", "summary",
+    for key in ("ranking", "conditions", "constructs", "agreement", "shift", "summary",
                 "construct_shift"):
         parts = collect(key)
         preference_frames[key] = (pd.concat(parts, ignore_index=True) if parts

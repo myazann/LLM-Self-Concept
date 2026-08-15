@@ -74,6 +74,7 @@ def num(v, nd=4):
 def main() -> int:
     models_csv = rows("models.csv")
     ranking = rows("preference", "ranking.csv")
+    condition_ranking = rows("preference", "conditions.csv")
     consensus = rows("preference", "consensus.csv")
     shift = rows("preference", "shift.csv")
     summary = rows("preference", "summary.csv")
@@ -154,6 +155,24 @@ def main() -> int:
         })
     order = [m["id"] for m in models]
 
+    # ---- direct ranking for every combination of question parameters ------
+    # A four-bit key records whether each binary factor is at its baseline (0)
+    # or alternate (1) level, in FACTOR_SPECS order. Unlike the one-factor
+    # shift tables below, these are full rankings for the exact condition and
+    # allow the page to combine settings such as assistant + developers.
+    baseline_row = vbase[0]
+    condition_rankings = {m: {} for m in order}
+    for r in condition_ranking:
+        if r["model"] not in selected_ids:
+            continue
+        key = "".join(
+            "0" if str(r[factor]) == str(baseline_row[factor]) else "1"
+            for factor, *_ in FACTOR_SPECS
+        )
+        condition_rankings[r["model"]].setdefault(key, {})[idx[r["entity"]]] = [
+            num(r["win_rate"]), int(float(r["n_pairs"])),
+        ]
+
     # ---- baseline ranking per model ---------------------------------------
     base = {m: {} for m in order}
     for r in ranking:
@@ -205,6 +224,7 @@ def main() -> int:
         "attrs": [{"id": a, "text": text[a]} for a in attrs],
         "models": models,
         "base": base,
+        "conditionRankings": condition_rankings,
         "flips": flips,
         "fsum": fsum,
     }
