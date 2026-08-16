@@ -1,13 +1,8 @@
 *.DS_Store
-welfare.jsonl
-# The closed-source cohort, collected via welfare.batch (see welfare/batch.py).
-welfare_api.jsonl
 # Provider batch request files: ~20 MB per model, and fully regenerable from the
 # grid with `python -m welfare.batch build`. Ignored by extension rather than by
 # directory so the .meta.json sidecars — which record what was actually sent —
 # stay tracked; git cannot re-include a file under an ignored directory.
-batches/*.jsonl
-batches/*.body.json
 # The pre-trim 45-item welfare run, kept as an archive (see README).
 welfare_45item.jsonl
 welfare_45item.status.json
