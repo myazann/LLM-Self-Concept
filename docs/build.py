@@ -89,18 +89,17 @@ SLOT_TEXT = {"qvar": QUESTION_VARIANT_TEXT, "object": OBJECT_TEXT,
 PROMPT_EXAMPLE = ("MSI_03", "RSES_05")
 
 # One categorical hue per model, in this order, as CSS custom properties defined
-# in the page. Blue is NOT here: it is reserved for the cohort average, and each
-# of these is far enough from it (OKLab dE >= 20 normal, >= 19 simulated
-# protan/deutan, both modes) that a model's mark can never read as the average.
-# Hues are assigned by the model's position in PRESENTATION_MODELS, so a colour
-# belongs to a model and not to its rank.
+# in the page. Blue is NOT here: it is reserved for the cohort average. Hues are
+# assigned by the model's position in PRESENTATION_MODELS, so a colour belongs to
+# a model and not to its rank.
 #
-# NOT A CYCLE. Five or more marks of different hue cannot be told apart on one
-# row from this palette at all (the best five-way set reaches OKLab dE 11.9,
-# under the 15 floor), which is why the ranking chart shows one model's colour at
-# a time. A fifth presentation model is a design decision — fold it into a
-# neutral group, or facet the chart — not a fifth generated hue, so this raises
-# instead of wrapping around.
+# NOT A CYCLE, and not a list to extend by eye. All four sit on one chart row
+# together with the blue average, which is the hardest case a categorical palette
+# faces (any two marks can end up adjacent), and the four were searched for that
+# job: they clear every hard gate in light and dark at --pairs all. The stock
+# palette cannot — its best five-way subset lands at OKLab dE 11.9, under the 15
+# floor. A fifth model therefore needs a re-validated set, or grouping, or a
+# facet, so this raises instead of wrapping around. See docs/README.md.
 MODEL_HUES = ["--m1", "--m2", "--m3", "--m4"]
 
 # The public presentation is a forced-choice view. The optional No Preference
@@ -331,22 +330,14 @@ def main() -> int:
     q_of = {(r["factor"], r["model"], r["entity"]): num(r["q"])
             for r in read_at_baseline(tested, "preference", "shift.csv")}
     flips = {f[0]: {m: {} for m in order} for f in factors}
-    fsum = {f[0]: {} for f in factors}
     for fi, (factor, *_rest) in enumerate(factors):
         flip_key = "".join("1" if i == fi else "0" for i in range(len(factors)))
         for m in order:
-            deltas = []
             for i in range(len(attrs)):
                 baseline = condition_rankings[m]["000"][i][0]
                 changed = condition_rankings[m][flip_key][i][0]
-                delta = changed - baseline
-                deltas.append(abs(delta))
-                flips[factor][m][i] = [changed, num(delta), None, None,
+                flips[factor][m][i] = [changed, num(changed - baseline), None, None,
                                        q_of.get((factor, m, attrs[i]))]
-            fsum[factor][m] = {
-                "shift": num(mean(deltas)),
-                "max": num(max(deltas)),
-            }
 
     trials = sum(
         int(r["n_trials"]) for r in coverage
@@ -386,7 +377,6 @@ def main() -> int:
         "base": base,
         "conditionRankings": condition_rankings,
         "flips": flips,
-        "fsum": fsum,
     }
 
     blob = json.dumps(payload, separators=(",", ":"))

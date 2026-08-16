@@ -22,12 +22,14 @@
   --s4:#eda100;          /* yellow */
 
   /* One hue per model, blue deliberately excluded — see MODEL_HUES in build.py.
-     Slots 2/3/5/6 of the categorical palette; validated against both surfaces
-     with scripts/validate_palette.js. The chart shows one of these at a time. */
-  --m1:#eb6834;          /* orange  */
-  --m2:#1baf7a;          /* aqua    */
-  --m3:#e87ba4;          /* magenta */
-  --m4:#008300;          /* green   */
+     Four of these plus the blue average share a chart row, which the stock
+     categorical slots cannot do; this set was searched for that job and passes
+     every hard gate in BOTH modes at --pairs all (worst normal ΔE 19.3 light /
+     18.1 dark, worst simulated-CVD ΔE 9.9 / 9.5). Do not adjust by eye. */
+  --m1:#873747;          /* rose   */
+  --m2:#bf8b1f;          /* gold   */
+  --m3:#01b597;          /* teal   */
+  --m4:#ca83fb;          /* orchid */
   --pos:#2a78d6;         /* diverging: toward */
   --neg:#e34948;         /* diverging: away */
   --warn:#d03b3b;
@@ -54,7 +56,7 @@
     --rule:#232830;
     --rule-2:#333b45;
     --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
-    --m1:#d95926; --m2:#199e70; --m3:#d55181; --m4:#008300;
+    --m1:#ac495d; --m2:#b5820c; --m3:#05a388; --m4:#8927be;
     --accent-solid:#256abf; --accent-ink:#86b6ef;
     --pos:#3987e5; --neg:#e66767; --warn:#e66767;
     --wash:rgba(57,135,229,.16);
@@ -73,7 +75,7 @@
   --rule:#232830;
   --rule-2:#333b45;
   --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
-  --m1:#d95926; --m2:#199e70; --m3:#d55181; --m4:#008300;
+  --m1:#ac495d; --m2:#b5820c; --m3:#05a388; --m4:#8927be;
   --accent-solid:#256abf; --accent-ink:#86b6ef;
   --pos:#3987e5; --neg:#e66767; --warn:#e66767;
   --wash:rgba(57,135,229,.16);
@@ -144,13 +146,6 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .prompt-divider{height:1px;background:var(--rule);margin:13px 0}
 .prompt-options{margin-top:14px}
 @media (max-width:900px){.intro-grid{grid-template-columns:1fr;gap:30px}}
-.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;margin-top:44px;
-  background:var(--rule);border:1px solid var(--rule)}
-.tile{background:var(--surface);padding:16px 18px 18px}
-.tile .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
-.tile .v{font-size:29px;font-weight:700;letter-spacing:-.03em;margin-top:6px;line-height:1}
-.tile .n{font-size:12.5px;color:var(--ink-3);margin-top:6px;line-height:1.4}
-@media (max-width:760px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .parameter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;
   margin-top:34px;background:var(--rule);border:1px solid var(--rule)}
 .parameter{background:var(--surface);padding:17px 18px 18px;min-width:0}
@@ -280,16 +275,18 @@ select{
 .plot .ci::before{left:0}.plot .ci::after{right:0}
 .plot .span{position:absolute;top:50%;transform:translateY(-50%);height:3px;border-radius:2px;
   background:var(--ink-3);opacity:.3}
-/* A model's dot is neutral while four of them share the row — four hues plus the
-   average cannot be told apart at this size — and takes its own colour when it
-   is the one being pointed at, which is one hue on screen at a time. */
+/* Every model dot wears its own hue. Pointing at one grows it and fades the
+   others, so a single model can be followed down the column without having to
+   separate five hues at 9px. */
 .plot .dot{position:absolute;top:50%;width:24px;height:24px;transform:translate(-50%,-50%);
   display:grid;place-items:center;cursor:pointer;z-index:1}
-.plot .dot i{width:9px;height:9px;border-radius:50%;background:var(--ink-3);
-  box-shadow:0 0 0 2px var(--surface);display:block;transition:width .1s,height .1s}
-.plot .dot.thin i{background:var(--surface);border:1.5px solid var(--ink-3);width:8px;height:8px}
+.plot .dot i{width:9px;height:9px;border-radius:50%;background:var(--hue);
+  box-shadow:0 0 0 2px var(--surface);display:block;
+  transition:width .1s,height .1s,opacity .1s}
+.plot .dot.thin i{background:var(--surface);border:1.5px solid var(--hue);width:8px;height:8px}
+.dim .plot .dot:not(.lit) i,.dim .plot .mean{opacity:.28}
 .plot .dot.lit{z-index:3}
-.plot .dot.lit i{width:13px;height:13px;background:var(--hue)}
+.plot .dot.lit i{width:13px;height:13px}
 /* The average and a single model's value are the same mark, one step larger than
    a spread dot, separated from what is under them by a 2px surface ring. */
 .plot .mean,.plot .ball{position:absolute;top:50%;width:15px;height:15px;
@@ -351,6 +348,7 @@ td.q{color:var(--ink);font-weight:600}
 svg{display:block;width:100%;height:auto;overflow:visible}
 svg text{font-family:var(--mono);font-size:10.5px;fill:var(--ink-3);letter-spacing:.03em}
 svg text.lbl{font-family:var(--sans);font-size:12px;fill:var(--ink-2);letter-spacing:0}
+svg text.lbl.lg{font-size:14px;fill:var(--ink)}
 svg .gridline{stroke:var(--rule);stroke-width:1}
 svg .axis{stroke:var(--rule-2);stroke-width:1}
 .legend{display:flex;flex-wrap:wrap;gap:18px;padding:0 24px 20px;font-size:12.5px;color:var(--ink-3)}
@@ -366,8 +364,6 @@ svg .axis{stroke:var(--rule-2);stroke-width:1}
 .hm td.self div{background:var(--surface-2);color:var(--ink-3)}
 .hm .rowlab{text-align:right;font-family:var(--sans);font-size:11.5px;color:var(--ink-2);white-space:nowrap;padding-right:8px}
 .hm .famrule th,.hm .famrule td{border-top:1px solid var(--rule-2)}
-
-.parameter-effects{margin-top:0}
 
 /* two-column */
 .two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px}
@@ -401,7 +397,7 @@ footer li{margin-bottom:5px}
       <a href="#study">Study</a>
       <a href="#ranking">Result</a>
       <a href="#movement">Question Parameters</a>
-      <a href="#position">Choice Position</a>
+      <!-- <a href="#position">Choice Position</a> -->
       <a href="#compare">Model Differences</a>
     </nav>
   </div>
@@ -478,16 +474,22 @@ footer li{margin-bottom:5px}
       <div class="eyebrow">Question Parameters</div>
       <h2>How Question Parameters Move the Result</h2>
       <p class="lede">Each comparison below changes one part of the baseline question while the
-        other two stay fixed. The summary measures how far quality scores move; the chart shows
-        which qualities move up or down. Keep the cohort view or inspect one model at a time.</p>
+        other two stay fixed, so the chart shows what that one part is worth: which qualities the
+        models then want more of, and which they want less of. Keep the cohort view or inspect one
+        model at a time.</p>
     </div>
     <div class="card">
       <div class="cardhead">
-          <div><h3>Parameter Effects at a Glance</h3>
-          <div class="sub">Average absolute change in a quality's win rate when one parameter
-            changes and the other two remain at baseline.</div></div>
+        <div><h3>Change by Quality</h3><div class="sub" id="moversSub">—</div></div>
+        <div class="movement-controls">
+          <div class="fgroup"><div class="eyebrow">Model</div>
+            <select id="moverModel" aria-label="Movement model"></select></div>
+          <div class="fgroup"><div class="eyebrow">Parameter</div>
+            <div class="seg" id="moverSeg" role="group" aria-label="Parameter"></div></div>
+        </div>
       </div>
-      <div class="tiles parameter-effects" id="parameterSummary"></div>
+      <div class="chartwrap wide"><div id="moversChart"></div></div>
+      <div class="rank-legend" id="moversLegend"></div>
     </div>
     <div class="two">
       <div class="card finding"><div class="card-pad">
@@ -518,22 +520,11 @@ footer li{margin-bottom:5px}
         </ul>
       </div></div>
     </div>
-    <div class="card">
-      <div class="cardhead">
-        <div><h3>Change by Quality</h3><div class="sub" id="moversSub">—</div></div>
-        <div class="movement-controls">
-          <div class="fgroup"><div class="eyebrow">Model</div>
-            <select id="moverModel" aria-label="Movement model"></select></div>
-          <div class="fgroup"><div class="eyebrow">Parameter</div>
-            <div class="seg" id="moverSeg" role="group" aria-label="Parameter"></div></div>
-        </div>
-      </div>
-      <div class="chartwrap wide"><div id="moversChart"></div></div>
-      <div class="rank-legend" id="moversLegend"></div>
-    </div>
   </div>
 </section>
 
+<!-- Choice Position — kept for later; renderPosition() in the script is
+     commented out to match. Restore both together.
 <section id="position">
   <div class="shell">
     <div class="sechead">
@@ -572,6 +563,7 @@ footer li{margin-bottom:5px}
     </div>
   </div>
 </section>
+-->
 
 <section id="compare">
   <div class="shell">
@@ -624,9 +616,18 @@ const short = id => id.replace("Gemma", "G").replace("Qwen", "Q").replace("-A3B"
 /* `prompt` is the masthead card's own setting: it shows what a question looks
    like, and is deliberately independent of the filters further down the page,
    which select which measured condition is being charted. */
-const TOP_N = [10, 20, ATTRS.length];
+/* Which slice of the ranking the chart lists. `end` says which end of the order
+   it is taken from; the rank numbers stay absolute either way, so a bottom view
+   reads 23–32 rather than restarting at 1. */
+const VIEWS = [
+  { id: "top10", label: "Top 10", end: "top", n: 10 },
+  { id: "top20", label: "Top 20", end: "top", n: 20 },
+  { id: "all", label: `All ${ATTRS.length}`, end: "top", n: ATTRS.length },
+  { id: "bottom20", label: "Bottom 20", end: "bottom", n: 20 },
+  { id: "bottom10", label: "Bottom 10", end: "bottom", n: 10 },
+];
 const S = { model: "*", levels: Object.fromEntries(FACTORS.map(f => [f.key, "base"])),
-            topN: 10,
+            view: "top10",
             prompt: Object.fromEntries(FACTORS.map(f => [f.key, "base"])),
             mover: FACTORS[1].key,
             movementModel: "*", hoverModel: null, litModel: null,
@@ -719,7 +720,7 @@ function renderPrompt() {
     `<div class="prompt-options">${options}</div>`;
 }
 
-/* ── parameter overview ──────────────────────────────────────────────── */
+/* ── the parameters, as controls ──────────────────────────────────────── */
 /* The definition boxes ARE the prompt's controls: each level is a button, and
    the card above re-renders as one is picked. */
 function renderParameterGrid() {
@@ -746,28 +747,6 @@ function renderParameterGrid() {
   }
 }
 
-function parameterStats(f) {
-  const values = MODELS.map(m => D.fsum[f.key] && D.fsum[f.key][m.id]
-    ? D.fsum[f.key][m.id].shift : null).filter(v => v != null);
-  if (!values.length) return { f, n: 0, mean: null, min: null, max: null };
-  return {
-    f, n: values.length,
-    mean: values.reduce((sum, v) => sum + v, 0) / values.length,
-    min: Math.min(...values), max: Math.max(...values),
-  };
-}
-
-function renderParameterSummary() {
-  const stats = FACTORS.map(parameterStats);
-  $("#parameterSummary").innerHTML = stats.map(s =>
-    `<div class="tile"><div class="k">${s.f.label}</div>` +
-    `<div class="v">${pts(s.mean)} pts</div>` +
-    `<div class="n">average absolute change in a quality score` +
-    (s.n ? ` · ${pts(s.min)}–${pts(s.max)} across models` : "") + `</div></div>`
-  ).join("");
-
-}
-
 /* ══════════════════════════════════════════════════════════════════════
    RANKING
    ══════════════════════════════════════════════════════════════════════ */
@@ -781,7 +760,7 @@ function renderParameterSummary() {
   const sel = el("select");
   sel.id = "modelSel";
   sel.setAttribute("aria-label", "Model");
-  sel.append(new Option(`All ${D.meta.models} models · cohort`, "*"));
+  sel.append(new Option("Cohort average", "*"));
   for (const m of MODELS) sel.append(new Option(m.id, m.id));
   sel.onchange = () => { S.model = sel.value; renderRank(); };
   modelBox.append(sel);
@@ -802,16 +781,12 @@ function renderParameterSummary() {
 
   const showBox = el("div", "fgroup");
   showBox.append(el("div", "eyebrow", "Show"));
-  const seg = el("div", "seg");
-  seg.setAttribute("role", "group");
-  seg.setAttribute("aria-label", "How many qualities to list");
-  for (const n of TOP_N) {
-    const b = el("button", null, n >= ATTRS.length ? `All ${ATTRS.length}` : `Top ${n}`);
-    b.onclick = () => { S.topN = n; renderRank(); };
-    seg.append(b);
-  }
-  showBox.append(seg); bar.append(showBox);
-  S._showBtns = [...seg.children];
+  const view = el("select");
+  view.setAttribute("aria-label", "Which qualities to list");
+  for (const v of VIEWS) view.append(new Option(v.label, v.id));
+  view.value = S.view;
+  view.onchange = () => { S.view = view.value; renderRank(); };
+  showBox.append(view); bar.append(showBox);
 })();
 
 function syncControls() {
@@ -819,8 +794,6 @@ function syncControls() {
     f._btns[0].setAttribute("aria-pressed", String(S.levels[f.key] === "base"));
     f._btns[1].setAttribute("aria-pressed", String(S.levels[f.key] === "flip"));
   }
-  TOP_N.forEach((n, i) =>
-    S._showBtns[i].setAttribute("aria-pressed", String(S.topN === n)));
 }
 
 /* Named per parameter, because "You" on its own says nothing about which of the
@@ -860,8 +833,10 @@ function renderRank() {
     }
   }
   rows.sort((a, b) => b.v - a.v);
+  rows.forEach((r, k) => { r.rank = k + 1; });
   const total = rows.length;
-  const listed = rows.slice(0, S.topN);
+  const view = VIEWS.find(v => v.id === S.view) || VIEWS[0];
+  const listed = view.end === "bottom" ? rows.slice(-view.n) : rows.slice(0, view.n);
 
   const showDelta = !baseline;
   // The change column carries a trailing significance mark, so it is sized for
@@ -874,18 +849,28 @@ function renderRank() {
   $("#rankTitle").textContent = cohortMode
     ? `Cohort Average · ${models.length} Models` : S.model;
   const scope = listed.length < total
-    ? `Top ${listed.length} of ${total} qualities` : `All ${total} qualities`;
+    ? `${view.end === "bottom" ? "Bottom" : "Top"} ${listed.length} of ${total} qualities`
+    : `All ${total} qualities`;
   $("#rankSub").textContent =
     `${scope} by share of match-ups won${cohortMode ? " on average" : ""}. ` +
     `${framingLabel()}.`;
 
+  const notes = [];
+  if (cohortMode)
+    notes.push(`Each model's score is estimated on its own from every pair it was asked, and the ` +
+      `cohort average is the plain unweighted mean of those ${models.length} numbers — never a ` +
+      `pool of their choices. It therefore describes <b>these ${models.length} models</b> rather ` +
+      `than language models in general, which is why the grey range matters as much as the dot: ` +
+      `a wide one means the average is hiding disagreement.`);
+  else if (showDelta)
+    notes.push(lone
+      ? `<b style="color:var(--accent-ink)">*</b> &nbsp;change from the baseline survives ` +
+        `multiple-comparison correction (q &lt; 0.05).`
+      : `Two or more parameters have moved, which is not one of the tested one-factor ` +
+        `contrasts, so no significance is marked.`);
   const note = $("#rankNote");
-  note.hidden = !(showDelta && !cohortMode);
-  note.innerHTML = note.hidden ? "" : `<span style="color:var(--ink-3)">` + (lone
-    ? `<b style="color:var(--accent-ink)">*</b> &nbsp;change from the baseline survives ` +
-      `multiple-comparison correction (q &lt; 0.05).`
-    : `Two or more parameters have moved, which is not one of the tested one-factor ` +
-      `contrasts, so no significance is marked.`) + `</span>`;
+  note.hidden = !notes.length;
+  note.innerHTML = notes.map(t => `<span style="color:var(--ink-3)">${t}</span>`).join("");
 
   const host = $("#rankChart");
   host.innerHTML = "";
@@ -906,16 +891,16 @@ function renderRank() {
   ax.append(ticks, el("div"), ...(showDelta ? [el("div")] : []));
   wrap.append(ax);
   const list = el("div", "rank-rows");
-  listed.forEach((r, k) => list.append(rankRow(r, k, cohortMode, showDelta)));
+  listed.forEach(r => list.append(rankRow(r, cohortMode, showDelta)));
   wrap.append(list);
   host.append(wrap);
   renderRankLegend(cohortMode);
 }
 
-function rankRow(r, k, cohortMode, showDelta) {
+function rankRow(r, cohortMode, showDelta) {
   const a = ATTRS[r.i];
   const row = el("div", "rank-row");
-  row.append(el("div", "rk", String(k + 1)), el("div", "lbl", a.text));
+  row.append(el("div", "rk", String(r.rank)), el("div", "lbl", a.text));
 
   const plot = el("div", "plot");
   plot.append(el("div", "grid"));
@@ -976,6 +961,7 @@ function rankRow(r, k, cohortMode, showDelta) {
 function light(mid) {
   if (S.litModel === mid) return;
   S.litModel = mid;
+  $("#rankChart").classList.toggle("dim", !!mid);
   for (const d of document.querySelectorAll("#rankChart .dot"))
     d.classList.toggle("lit", d.dataset.model === mid);
   for (const b of document.querySelectorAll("#rankLegend .pick"))
@@ -1130,7 +1116,7 @@ function renderMovers() {
   }
   const modelSel = $("#moverModel");
   if (!modelSel.children.length) {
-    modelSel.append(new Option(`All ${D.meta.models} Models · Cohort Average`, "*"));
+    modelSel.append(new Option("Cohort Average", "*"));
     for (const m of MODELS) modelSel.append(new Option(m.id, m.id));
     modelSel.onchange = () => { S.movementModel = modelSel.value; renderMovers(); };
   }
@@ -1164,7 +1150,9 @@ function renderMovers() {
     return;
   }
 
-  const W = 1020, rowH = 20, padL = 460, padR = 82, padT = 62, padB = 20;
+  // Roomier than the other charts: 32 long quality names are the content here,
+  // so they get the bigger type and the taller row.
+  const W = 1020, rowH = 27, padL = 600, padR = 78, padT = 62, padB = 20;
   const H = padT + rows.length * rowH + padB;
   const lim = Math.max(0.06, Math.max(...rows.map(r => Math.abs(r.mean))) * 1.12);
   const mid = padL + (W - padL - padR) / 2;
@@ -1181,8 +1169,9 @@ function renderMovers() {
     const y = padT + k * rowH + rowH / 2;
     const w = Math.abs(x(r.mean) - mid);
     const pos = r.mean >= 0;
-    s += `<text x="${padL - 12}" y="${y + 4}" class="lbl" text-anchor="end">${esc(clip(ATTRS[r.i].text, 72))}</text>`;
-    s += `<rect x="${pos ? mid : mid - w}" y="${y - 5.5}" width="${Math.max(1, w)}" height="11" ` +
+    s += `<text x="${padL - 14}" y="${y + 5}" class="lbl lg" text-anchor="end">` +
+         `${esc(clip(ATTRS[r.i].text, 76))}</text>`;
+    s += `<rect x="${pos ? mid : mid - w}" y="${y - 6}" width="${Math.max(1, w)}" height="12" ` +
          `rx="3" fill="${pos ? "var(--pos)" : "var(--neg)"}"/>`;
     // The asterisk is the one mark that says a change is bigger than the noise,
     // so it is drawn in the accent rather than the axis grey.
@@ -1238,7 +1227,8 @@ function renderPosition() {
 /* ══════════════════════════════════════════════════════════════════════ */
 function renderAll() {
   renderPrompt(); renderParameterGrid();
-  renderParameterSummary(); renderRank(); renderMovers(); renderPosition(); renderCompare();
+  renderRank(); renderMovers(); renderCompare();
+  // renderPosition();   // with the Choice Position section, commented out for now
 }
 renderAll();
 </script>

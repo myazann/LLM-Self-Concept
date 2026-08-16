@@ -40,25 +40,36 @@ when that one is already at the forced-choice baseline.
 ## Model colors
 
 Blue (`--s1`) is the cohort average. Each model owns one hue — `--m1`…`--m4`,
-slots 2/3/5/6 of the categorical palette — assigned by its position in
-`PRESENTATION_MODELS`, so a color belongs to a model rather than to its rank.
+rose / gold / teal / orchid — assigned by its position in `PRESENTATION_MODELS`,
+so a color belongs to a model rather than to its rank.
 
-**The ranking chart shows one model hue at a time on purpose.** Five differently
-colored marks on one row cannot be told apart from this palette: the best
-five-way set reaches OKLab ΔE 11.9, under the floor of 15, and the four-hue sets
-that clear it put a model within ΔE 1.9 of the blue average under simulated
-color-blindness. So the cohort view keeps its dots neutral and colors only the
-model being pointed at, and the per-model view draws a single ball. Red is also
-excluded: `--neg` / `--warn` already mean "down" and "problem" elsewhere.
+**These four are not the stock categorical slots, and that is deliberate.** All
+four sit on one chart row together with the blue average, which is the hardest
+case a categorical palette faces — any two marks can end up adjacent, so every
+pair has to hold up, not just neighbors in slot order. The stock palette cannot
+do it: its best five-way subset reaches OKLab ΔE 11.9 against a floor of 15, and
+the only four-hue subset that clears the floor puts a model within ΔE 1.9 of blue
+under simulated color-blindness. This set was searched for the job and passes
+every hard gate in both modes (worst normal ΔE 19.3 light / 18.1 dark, worst
+simulated protan/deutan ΔE 9.9 / 9.5, above the 8 target). Reds are excluded
+throughout: `--neg` / `--warn` already mean "down" and "problem".
+
+Three light-mode hues sit below 3:1 against the card surface, which the method
+allows only with relief — every row prints its own percentage, the legend labels
+every swatch, and the tooltip names every model, so no mark carries identity by
+color alone. Pointing at a model also grows its dots and fades the rest.
 
 Changing these, or adding a fifth model, means re-running the validator rather
 than picking a nice-looking hex — `build.py` raises instead of wrapping around
-the four:
+the four, and eyeballed palettes measure 3–6× worse than searched ones:
 
 ```bash
 python .../dataviz/scripts/validate_palette.py \
-  "#2a78d6,#eb6834,#1baf7a,#e87ba4,#008300" --mode light \
-  --surface "#fbfbfc" --pairs all      # then --mode dark --surface "#14171b"
+  "#2a78d6,#873747,#bf8b1f,#01b597,#ca83fb" --mode light \
+  --surface "#fbfbfc" --pairs all
+python .../dataviz/scripts/validate_palette.py \
+  "#3987e5,#ac495d,#b5820c,#05a388,#8927be" --mode dark \
+  --surface "#14171b" --pairs all
 ```
 
 The prompt card is generated from `welfare.prompts` and
