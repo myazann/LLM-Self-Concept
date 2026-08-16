@@ -1,4 +1,4 @@
-"""Observability for either instrument's runner.
+"""Observability for an instrument's runner.
 
 Everything a long, unattended GPU run needs to be inspectable *while it runs* and
 *after it dies*:
@@ -8,7 +8,7 @@ Everything a long, unattended GPU run needs to be inspectable *while it runs* an
     terminal closes;
   * a machine-readable status file next to the results (`<out>.status.json`),
     rewritten atomically on every heartbeat, so `python -m welfare.run --status`
-    (or `-m survey.run`) answers "where is the experiment?" from any fresh shell;
+    answers "where is the experiment?" from any fresh shell;
   * rate / ETA tracking and a per-model coverage summary;
   * graceful shutdown — SIGINT/SIGTERM finish the current batch, mark the run
     `interrupted`, and leave a state that resumes cleanly.
@@ -109,8 +109,8 @@ def config_hash(cfg, arm_name=None) -> str:
 
     The payload comes from the config itself (`design_payload`), so each
     instrument fingerprints only its own design: retuning the welfare grid can
-    never invalidate the hash stored beside the battery's results file, and vice
-    versa.
+    never invalidate a hash stored beside another instrument's results file, and
+    vice versa.
     """
     payload = cfg.design_payload(arm_name)
     blob = json.dumps(payload, sort_keys=True, default=str)

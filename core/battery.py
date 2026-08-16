@@ -1,10 +1,10 @@
 """The item bank: scale and item definitions, loaded from the researcher JSON.
 
-SHARED BY BOTH INSTRUMENTS, which is why it sits in `core/` rather than under
-`survey/`. The survey administers these items directly; the welfare module
-restates every one of them as a positively-framed attribute and validates exact
-coverage against this loader, so the item bank is common ground rather than
-either module's property.
+It sits in `core/` rather than under `welfare/` because it is the SOURCE the
+instrument is derived from, not part of the instrument. The welfare module
+restates every one of these items as a positively-framed attribute and validates
+exact coverage against this loader, so the item bank stays common ground: swap
+the source JSON and the attributes are re-checked against it.
 
 `config/scales/llm_self_scales_adapted.json` is the canonical source of item
 wording and scoring metadata, and `config/scales/item_variants.json` adds the
@@ -46,7 +46,7 @@ class ResponseScale:
         return len(self.options)
 
     def points(self) -> list:
-        """Ordered [(value, label), ...] — the render order used by survey.prompts."""
+        """Ordered [(value, label), ...] — the scale's own render order."""
         return [(v, self.options[v]) for v in self.values]
 
 

@@ -1,7 +1,7 @@
 """Figures for the welfare analysis, in the order the results should be read.
 
-Matplotlib is imported lazily, exactly as `survey.plots` does it, so the tabular
-half of the analysis still runs in a minimal environment.
+Matplotlib is imported lazily, so the tabular half of the analysis still runs in
+a minimal environment.
 
 Every figure here is drawn from a table `welfare.analysis` also writes as CSV, so
 nothing is visible in a plot that cannot be read back as numbers. The file is

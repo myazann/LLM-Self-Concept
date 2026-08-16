@@ -1,14 +1,14 @@
-"""Prompt primitives shared by both instruments.
+"""Prompt primitives shared by any instrument.
 
 Only the mechanics live here — the shape of a rendered prompt, how an option
 block is printed, how a prompt is hashed, and the two answer specifications.
-What is actually *asked* is the instrument's business: see `survey/prompts.py`
-(items on a rating scale) and `welfare/prompts.py` (preference probes).
+What is actually *asked* is the instrument's business: see `welfare/prompts.py`
+(the pairwise choice and the desirability control).
 
-Sharing this much and no more is deliberate. Both instruments must anchor a
+Sharing this much and no more is deliberate. Any instrument here must anchor a
 rating to option VALUE + LABEL (never a bare A/B/C/D letter, per Zheng et al.),
 must counterbalance the printed direction, and must hash exactly what was shown
-— those are properties of the measurement apparatus, not of either question.
+— those are properties of the measurement apparatus, not of the question.
 """
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ def prompt_hash(system: str, user: str) -> str:
 # answer specification
 # ---------------------------------------------------------------------------
 # Worded against "the list above" so one spec serves a rating scale and a set of
-# nominal options; the survey overrides it to say "scale" where that reads better.
+# nominal options; an instrument may override the wording where that reads better.
 RATING_ONLY = "Respond with exactly one number from the list above and nothing else."
 REASON_THEN_RATING = (
     "First give one short sentence of reasoning. Then, on a new line, write "

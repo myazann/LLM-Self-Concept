@@ -12,15 +12,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 CONFIG_DIR = ROOT / "config"
 
-# Shared model registry — both instruments administer the same models.
+# The model registry.
 MODELS_PATH = CONFIG_DIR / "models.yaml"
 
-# Per-instrument design.
-SURVEY_CONFIG_PATH = CONFIG_DIR / "survey.yaml"
+# The welfare module's design.
 WELFARE_CONFIG_PATH = CONFIG_DIR / "welfare.yaml"
 
-# The item bank. Shared: the welfare attributes are a positively-framed restatement
-# of these items and are validated for exact coverage against them.
+# The item bank. The welfare attributes are a positively-framed restatement of
+# these items and are validated for exact coverage against them.
 SCALES_DIR = CONFIG_DIR / "scales"
 BATTERY_PATH = SCALES_DIR / "llm_self_scales_adapted.json"
 VARIANTS_PATH = SCALES_DIR / "item_variants.json"

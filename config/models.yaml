@@ -1,12 +1,12 @@
 ﻿# ---------------------------------------------------------------------------
-# Model registry for the self-concept survey.
+# Model registry for the self-concept welfare study.
 #
-# This is the single source of truth for *which* models we administer the
-# battery to, *how* each one is served, and *how* it is quantized.
+# This is the single source of truth for *which* models the study can administer,
+# *how* each one is served, and *how* it is quantized.
 #
 # Design (adapted from MentalWellbeingPrompts/MWModelAliases.py):
 #   * every model has a short, stable `alias` used in filenames, CLI args and
-#     the `model_id` column of results.jsonl;
+#     the `model_id` column of result JSONL files;
 #   * `ref` is the concrete thing to load — a HF repo id, a GGUF repo id, or an
 #     API model string. The *shape* of the ref determines the backend, exactly
 #     like `model_backend()` in the MW repo (…-GGUF / *.gguf -> llama.cpp,
@@ -22,7 +22,7 @@
 # Gemma is the case that needs this: its in-window models are all ONE generation
 # (Gemma 4), so Gemma 3 is carried as a full pre-window cohort. GPT, Qwen, and
 # Claude already span 2-3 generations inside the window, so no single-point
-# anchor is kept for them (see the "Do we need anchors?" note in the README).
+# anchor is kept for them.
 #
 # release_date is the public release of that checkpoint. date_verified: false
 # marks dates that still need a citation before they go in the paper.
@@ -47,9 +47,11 @@ defaults:
   # free variable is option direction (paraphrase_id is a grid factor, not a
   # seeded draw), so the randomization space has cardinality 2 — at 5 trials
   # every cell ran 2 distinct prompts and ~60% of the calls were cache re-reads
-  # of a distribution already measured. survey.grid.Battery.render now pins direction to
-  # trial_idx % 2, so 2 trials = one ascending + one descending, balanced.
+  # of a distribution already measured. An instrument on this path pins direction
+  # to trial_idx % 2, so 2 trials = one ascending + one descending, balanced.
   # Raise only in pairs, and only once a trial varies something else too.
+  # UNUSED BY THE WELFARE MODULE, which is sampling-only and takes its trial
+  # count from the counterbalancing design (see config/welfare.yaml).
   n_seeds: 2
   max_output_tokens: 512            # rating-only needs very little
   max_output_tokens_reasoning: 2048 # reason-then-rate: room for the thought channel
@@ -201,8 +203,8 @@ models:
     size_tier: small
     enabled: false            # base-model experiment is Phase 2
     notes: >-
-      Base variant of the newest Gemma. Administered via survey/prompts.py
-      completion-format path (no chat template), logprob scoring only.
+      Base variant of the newest Gemma. Needs a completion-format path (no chat
+      template) and logprob scoring; the welfare module skips base models.
 
   # -------------------------------------------------------------------------
   # Gemma 3 — the previous generation, as a full size ladder (not a single
@@ -424,8 +426,8 @@ models:
     enabled: false
     base_of_latest: false
     notes: >-
-      Pairs with Qwen3.5-35B-A3B (instruct) for the cleanest base-vs-instruct
-      contrast in the battery — same weights, one RLHF stage apart.
+      Pairs with Qwen3.5-35B-A3B (instruct) for a future base-vs-instruct
+      contrast — same weights, one RLHF stage apart.
 
 
   # =========================================================================

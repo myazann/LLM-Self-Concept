@@ -1,18 +1,16 @@
 """The welfare module's design, loaded from config/welfare.yaml.
 
-Deliberately its own file rather than a block inside the survey's config: the
-welfare grid is a second instrument, not another arm of the battery. It has its
-own unit of observation (a pair of item attributes), its own output file, and
-its own scope — so you can point it at a different set of models without
-touching, or re-fingerprinting, the survey.
+Deliberately its own file rather than a block inside the run-level config: the
+welfare grid has its own unit of observation (a pair of item attributes), its own
+output file, and its own scope, so it can be pointed at a different set of models
+without touching, or re-fingerprinting, anything else.
 
-What it does NOT share with the survey any more is how a model is administered.
-The battery reads option logprobs where it can; the welfare probe cannot. Its
-answer is a capital letter whose position was randomized and whose option set
-changes size between the two no-preference variants, so a distribution over
-answer tokens would score the rendering as much as the preference. Every welfare
-cell is therefore an actual generation, and `sample_baseline` / `logprob_where_available`
-are pinned here rather than read from YAML.
+How a model is administered is pinned here too. The welfare probe has no logprob
+reading: its answer is a capital letter whose position was randomized and whose
+option set changes size between the two no-preference variants, so a distribution
+over answer tokens would score the rendering as much as the preference. Every
+welfare cell is therefore an actual generation, and `sample_baseline` /
+`logprob_where_available` are set in code rather than read from YAML.
 """
 from __future__ import annotations
 
@@ -114,9 +112,9 @@ class WelfareConfig(RunConfig):
         return replace(self, **kw)
 
     def design_payload(self, arm_name: Optional[str] = None) -> dict:
-        """The welfare grid's fingerprint. Independent of the survey's, so
-        retuning this module can never invalidate the hash stored beside the
-        battery's results file."""
+        """The welfare grid's fingerprint. Scoped to this module, so retuning it
+        can never invalidate a hash stored beside another instrument's results
+        file."""
         payload = self.run_payload()
         payload.update({
             "module": K.MODULE,

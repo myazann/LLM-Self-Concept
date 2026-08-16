@@ -1,19 +1,15 @@
 # Core runner/planner is stdlib + pyyaml. Analysis dependencies are listed
-# separately and remain unnecessary for `python -m survey.run --dry-run` or
-# `python -m welfare.run --dry-run`.
+# separately and remain unnecessary for `python -m welfare.run --dry-run`.
 pyyaml
 
 # --- model registry -------------------------------------------------------
 huggingface_hub   # GGUF filename resolution + weight download
 
 # --- analysis -------------------------------------------------------------
+# The whole analysis is a pair-level bootstrap written as matrix products
+# (welfare/resample.py), so it needs nothing beyond numpy/pandas.
 numpy
 pandas
-scipy
-pingouin          # Cronbach's alpha, McDonald's omega, ANOVA
-factor_analyzer   # EFA + parallel analysis
-semopy            # CFA / SEM
-statsmodels       # mixed-effects models for non-independent observations
 matplotlib        # generated validity and result plots
 
 # --- open-source path (the default run) -----------------------------------

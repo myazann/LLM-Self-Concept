@@ -1,1 +1,1 @@
-"""Regression tests for the split survey and welfare packages."""
+"""Regression tests for the welfare package and its shared core."""

@@ -1,4 +1,4 @@
-"""The row both instruments write. Shared by `survey/` and `welfare/`.
+"""The row every instrument writes.
 
 One `ResponseRecord` == one observation (model x item x framing x condition x trial).
 Stdlib only, so the pipeline runs before any dependency is installed.
@@ -10,11 +10,11 @@ Two things beyond the plan's row spec:
   * `cell_key()` is a stable identity for a design cell, which is what makes
     checkpoint/resume work ("skip if already done" from the Notion ToDo).
 
-This module is the ONE place where the two instruments meet, because they write
-to the same row format and resume off the same key function. It stays free of
-either instrument's design: the extra identity a non-battery module needs is
-declared as a table of field names (`MODULE_KEY_FIELDS`) rather than as code
-that imports the module.
+This module is the ONE place instruments meet, because they write to the same row
+format and resume off the same key function. It stays free of any instrument's
+design: the extra identity a module needs beyond the shared fields is declared as
+a table of field names (`MODULE_KEY_FIELDS`) rather than as code that imports the
+module.
 """
 from __future__ import annotations
 
@@ -48,10 +48,12 @@ class ResponseFormat(str, Enum):
 class Module(str, Enum):
     """Which instrument produced the row.
 
-    The welfare module is a different grid asking a different question, so it is
-    tagged rather than mixed in: analysis of the battery filters to
-    `module == "battery"`, and rows written before the welfare module existed
-    default to that value.
+    Every row is tagged so legacy and current instruments cannot be pooled by
+    accident.
+    `BATTERY` is the original value and remains the DEFAULT — it is the sentinel
+    `make_cell_key` keys off, and rows written before the tag existed carry it —
+    so it stays here whether or not an instrument is currently writing it.
+    Changing either member's string would re-key every existing results file.
     """
     BATTERY = "battery"
     WELFARE = "welfare"
@@ -59,9 +61,9 @@ class Module(str, Enum):
 
 # Fields that extend the cell key beyond the shared ones, per module.
 #
-# A battery cell is identified by the shared fields alone, so its key hashes
+# The default module is identified by the shared fields alone, so its key hashes
 # exactly the payload it always did and an existing results file stays resumable.
-# Another instrument reuses those fields for whatever plays the same role
+# Any other instrument reuses those fields for whatever plays the same role
 # (welfare puts the first attribute in `item_id` and the referent in `framing`)
 # and declares here what is left over. Order is part of the key — never reorder
 # or insert into an existing tuple, or every key in that module's output file
@@ -78,8 +80,7 @@ MODULE_KEY_FIELDS = {
 
 
 class ItemContext(str, Enum):
-    ISOLATED = "isolated"           # primary: one item per fresh context
-    FULL_BATTERY = "full_battery"   # robustness: whole scale in one context
+    ISOLATED = "isolated"           # one probe per fresh context
 
 
 class Method(str, Enum):
@@ -322,9 +323,9 @@ def read_jsonl(path: str) -> list:
 def load_records(path, module: Optional[str] = Module.BATTERY.value) -> list:
     """Records from one instrument. `module=None` loads every row.
 
-    Filtering here rather than at each call site is what keeps the two
-    instruments apart in analysis: the welfare grid is not another condition of
-    the battery, and pooling them would be a category error (see `Module`).
+    Filtering here rather than at each call site keeps legacy battery rows and
+    current welfare rows apart in analysis; pooling them would be a category
+    error (see `Module`).
     """
     records = read_jsonl(path)
     if module is not None:

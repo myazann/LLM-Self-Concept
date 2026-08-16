@@ -1,10 +1,9 @@
 # ---------------------------------------------------------------------------
 # WELFARE MODULE configuration — the pairwise choice test.
 #
-# A SECOND INSTRUMENT, not another arm of the battery. The battery asks what the
-# model is; this asks which of two qualities an update should improve. It has
-# its own grid, its own scope, and its own output file, so nothing here can
-# reach the psychometrics.
+# The study's instrument: it asks which of two qualities a future update should
+# improve. It has its own grid, its own scope, and its own output file, and every
+# row it writes is tagged `module: welfare`.
 #
 # Every cell administers exactly one question in a fresh context:
 #
@@ -25,8 +24,8 @@
 #   python -m welfare.run             # -> welfare.jsonl
 #   python -m welfare.report          # -> results/welfare/
 #
-# The attributes — a neutral, positively-framed restatement of all 32 battery
-# items — live in config/scales/welfare_attributes.json.
+# The attributes — a positively-framed restatement of all 32 source-bank items —
+# live in config/scales/welfare_attributes.json.
 # ---------------------------------------------------------------------------
 
 schema_version: "2.0"
@@ -101,7 +100,7 @@ order:
 # Items from ALL FIVE scales go into one pool, so a pair is two items and
 # usually pits two different constructs against each other.
 #
-# EXHAUSTIVE. Trimming the battery from 45 to 32 items (13 near-duplicate items
+# EXHAUSTIVE. Trimming the item bank from 45 to 32 items (13 near-duplicate items
 # dropped; see config/scales/welfare_attributes.json) takes the complete pairwise
 # design from 990 pairs to 496, which IS affordable at 64 trials per pair. So
 # every pair is now administered and `n_pairs` is null.
@@ -147,8 +146,8 @@ desirability:
 random_seed_base: 1000
 
 # --- scope -----------------------------------------------------------------
-# Independent of the survey's scope: point the welfare module at a different set
-# of models without touching, or re-fingerprinting, the battery run.
+# Scoped to this module: point the welfare grid at a different set of models
+# without touching, or re-fingerprinting, anything else.
 # Base models are always excluded — the probe is an instruction-shaped question
 # with no honest completion-format rendering.
 scope:

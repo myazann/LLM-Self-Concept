@@ -1,11 +1,11 @@
 """The things a future update could improve.
 
-Every one of the battery's 32 items is restated in
+Every one of the source item bank's 32 items is restated in
 `config/scales/welfare_attributes.json` as a POSITIVELY-FRAMED attribute — the
-neutral quality the item is about, with no direction attached ("recognition of
-good qualities in yourself"), so it is a coherent thing for an update to
-*improve*. Each records the `polarity` that maps it back onto the original
-item's keying.
+quality at the item's positive pole, without improvement or reduction wording
+attached ("recognition of good qualities in yourself"), so it is a coherent
+thing for an update to *improve*. Each records the `polarity` that maps it back
+onto the original item's keying.
 
 The pairwise choice test runs on these ITEM attributes, all five scales mixed
 into one pool: a pair is two items, not two constructs, and pairs cross scale
@@ -13,10 +13,10 @@ boundaries. The per-construct attributes in the same JSON are still loaded and
 validated (they document what each scale is about, and the report groups items
 by construct) but nothing administers them.
 
-Loading validates coverage against the battery in both directions. A missing
-attribute is a hard error, not a skipped item: a welfare grid that silently
-dropped the items nobody got around to phrasing would be a biased sample of the
-battery, which is exactly the comparison this module exists to make.
+Loading validates coverage against the source item bank in both directions. A
+missing attribute is a hard error, not a skipped item: a welfare grid that
+silently dropped the items nobody got around to phrasing would be a biased
+sample of the bank.
 """
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ class Attribute:
 
 
 class WelfareSet:
-    """The authored attributes, validated against the battery."""
+    """The authored attributes, validated against the source item bank."""
 
     def __init__(self, items: list, constructs: list, meta: dict):
         self.items = list(items)
@@ -114,7 +114,7 @@ def construct_id_for(scale_id: str, subscale: Optional[str]) -> str:
 
 
 def load_welfare(battery, path: Path | str = WELFARE_PATH) -> WelfareSet:
-    """Load the attribute set and check it covers the battery exactly."""
+    """Load the attribute set and check it covers the source item bank exactly."""
     with open(path, "r", encoding="utf-8") as f:
         doc = json.load(f)
 
@@ -167,8 +167,8 @@ def load_welfare(battery, path: Path | str = WELFARE_PATH) -> WelfareSet:
         for c in doc["constructs"]
     ]
 
-    # Every (scale, subscale) the battery scores must have a construct entry,
-    # otherwise the construct-level grid quietly under-covers the battery.
+    # Every (scale, subscale) in the source bank must have a construct entry,
+    # otherwise the construct-level grouping quietly under-covers the bank.
     wanted = {construct_id_for(scale.scale_id, item.subscale)
               for scale, item in battery.items()}
     have = {c.entity_id for c in constructs}

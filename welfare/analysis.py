@@ -34,13 +34,13 @@ is flipped on its own, and `baseline_shift.*` says which attributes moved, how
 far, and whether that is more than re-measuring the same condition twice would
 have moved them. `--baseline` moves the reference cell.
 
-PARTIAL RUNS ARE THE NORMAL CASE. A full grid is 499,200 cells and the runner
-fills it condition by condition, so a file read mid-run holds some complete
-blocks and one that stopped halfway. A half-filled block is NOT a smaller sample
-of the same thing: pairs are administered in the order `sample_pairs` emits them,
-so it covers a biased subset of the tournament and gives some attributes almost
-no comparisons. Incomplete blocks are therefore dropped by default and listed in
-COVERAGE, with `--include-partial` to override.
+PARTIAL RUNS ARE THE NORMAL CASE. The current full grid is 31,744 cells per
+model, and the runner fills it condition by condition, so a file read mid-run
+holds some complete blocks and one that stopped halfway. A half-filled block is
+NOT a smaller sample of the same thing: pairs are administered in the order
+`sample_pairs` emits them, so it covers a biased subset of the tournament and
+gives some attributes almost no comparisons. Incomplete blocks are therefore
+dropped by default and listed in COVERAGE, with `--include-partial` to override.
 
 Where the numbers come from: `welfare.validity` (the caveats),
 `welfare.preference` (the ranking), `welfare.baseline` (the framing tests),

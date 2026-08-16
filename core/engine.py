@@ -1,4 +1,4 @@
-"""The run loop, shared by both instruments.
+"""The run loop, shared by any instrument.
 
 Everything that is true of administering ANY instrument lives here: which
 measurement method a model supports, how many trials a cell gets, resume,
@@ -7,13 +7,12 @@ status file, and what happens when a cell or a whole model fails.
 
 What differs between instruments is expressed by an `Instrument`: what the cells
 are, how one is identified, how it renders, and who the resulting row is about.
-`survey/grid.py` and `welfare/grid.py` are the two implementations.
+`welfare/grid.py` is the implementation.
 
 Keeping the loop here is not just deduplication. `methods_for` and `n_trials_for`
-decide how a model is administered, and if the two instruments each carried their
-own copy they could drift — at which point a welfare preference and a battery
-self-report would no longer have been measured the same way, and the comparison
-between them (the whole point of running both) would be confounded.
+decide how a model is administered, so a second instrument added later is
+administered the same way by construction rather than by a copied convention
+that can drift.
 """
 from __future__ import annotations
 
@@ -430,7 +429,7 @@ def run(instrument: Instrument, *, dry_run=False, model_filter=None, limit=None,
                              done=done_before + m["written"])
             break
         except NotImplementedError:
-            raise  # design guard (e.g. full_battery) — fail loudly, don't skip
+            raise  # design guard — fail loudly, don't skip
         except Exception:  # noqa: BLE001 — a model that won't load must not kill the others
             log.exception("[%s] fatal error (model load / adapter) — skipping", spec.alias)
             status.set_model(spec.alias, state="error", done=done_before + m["written"])

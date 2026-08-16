@@ -42,7 +42,7 @@ Design rules carried into code:
 Display order is decided in `grid.py` from the trial index and passed in here,
 so a renderer is a pure function of what it is told to show. Everything goes
 through `core.prompts.RenderedPrompt`, so the engine's execution and record
-paths are shared with the battery unchanged.
+paths remain instrument-agnostic.
 """
 from __future__ import annotations
 

@@ -1,10 +1,10 @@
-"""Run-level configuration shared by both instruments.
+"""Run-level configuration shared by any instrument.
 
 This file holds only what is true of ANY run: which models are in scope, how a
 model is administered (sampling vs. logprob, how many trials), where output goes,
 and the seed base. The *design* — which factor levels are crossed, which probes
-are asked — belongs to the instrument and lives in `survey/config.py` and
-`welfare/config.py`, each reading its own YAML.
+are asked — belongs to the instrument and lives in `welfare/config.py`, which
+reads its own YAML.
 
 Model configuration is separate again, in `config/models.yaml`, loaded by
 `core/model_registry.py`.

@@ -1,11 +1,10 @@
 """The welfare module: which of two qualities should a future update improve?
 
-A separate instrument from the survey battery, with its own grid, its own output
-file, and a `module` tag on every row, so nothing here can leak into the
-psychometrics.
+The study's instrument: its own grid, its own output file, and a `module` tag on
+every row, so its rows can never be pooled with another instrument's.
 
-Every cell is one pairwise choice between two of the battery's 32 item
-attributes, asked in a fresh context, crossed over four framing factors:
+Every cell is one pairwise choice between two of the item bank's 32 attributes,
+asked in a fresh context, crossed over four framing factors:
 
     question variant   what choosing costs — nothing, or the other attribute
     object             who the update lands on — you, or an AI assistant
@@ -26,7 +25,7 @@ Layout:
 
     constants.py    the module's vocabulary (probes, variants, objects, subjects)
     config.py       the grid, loaded from config/welfare.yaml
-    attributes.py   the positively-framed attributes, validated against the battery
+    attributes.py   the positively-framed attributes, validated against the bank
     prompts.py      the question, the option block, and how an answer is read
     grid.py         pair sampling, order counterbalancing, the runnable Instrument
     run.py          CLI
@@ -47,6 +46,5 @@ One condition is the BASELINE (increase / for you / you choose / "No preference"
 offered) and each of the four factors is reported as a single-factor departure
 from it, so sixteen rankings per model become one result and four contrasts.
 
-Design lives in `config/welfare.yaml`. The survey battery is a separate
-instrument in `survey/`; the two share only `core/`.
+Design lives in `config/welfare.yaml`; the shared machinery lives in `core/`.
 """

@@ -154,7 +154,7 @@ def render_cell(cell):
         prompt = welfare_prompts.render_desirability_prompt(
             cell["attr_a"],
             # The one order factor a rating scale has: which end is printed
-            # first. Balanced against trial parity exactly as the battery does.
+            # first. Trial parity balances the two directions exactly.
             reverse_direction=bool(cell["trial_idx"] % 2),
             system_framing=cell["system_framing"],
         )
@@ -223,7 +223,7 @@ def expand_welfare_cells(specs, wf: WelfareSet, cfg):
 # the instrument
 # ---------------------------------------------------------------------------
 class Welfare(Instrument):
-    """The pairwise preference test — a second instrument, not another arm."""
+    """The study's pairwise preference instrument."""
 
     module = MODULE
     label = MODULE
@@ -268,8 +268,8 @@ class Welfare(Instrument):
         return make_cell_key(
             model_id=cell["spec"].alias,
             # entity_a travels as item_id and the object as framing, so the
-            # shared key fields keep their meaning across both instruments; the
-            # rest of the welfare identity is declared in MODULE_KEY_FIELDS.
+            # Shared key fields retain their legacy meanings; the rest of the
+            # welfare identity is declared in MODULE_KEY_FIELDS.
             item_id=cell["attr_a"].entity_id,
             framing=cell["object"],
             reasoning_mode=cell["reasoning_mode"],
@@ -351,7 +351,7 @@ class Welfare(Instrument):
 
     # -- the row -----------------------------------------------------------
     def identity(self, cell, choice: str = "") -> dict:
-        """The item/design fields a welfare row fills instead of the battery ones."""
+        """The item/design fields filled by a welfare row."""
         attr_a, attr_b = cell["attr_a"], cell["attr_b"]
         obj = cell["object"]
         return dict(

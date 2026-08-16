@@ -153,9 +153,14 @@ class WelfareGridTests(unittest.TestCase):
                              cell["_options"][letter])
 
     def test_desirability_is_asked_once_per_attribute_not_per_condition(self):
-        des = [c for c in self.cells if c["probe"] == DESIRABILITY]
+        # The main run leaves this optional control disabled. Enable it locally
+        # so the test exercises the implemented path instead of depending on the
+        # publication config's current switch.
+        instrument = Welfare(self.cfg.replace(desirability=True))
+        cells = list(instrument.expand([self.spec]))
+        des = [c for c in cells if c["probe"] == DESIRABILITY]
         entities = {c["attr_a"].entity_id for c in des}
-        self.assertEqual(len(entities), len(self.instrument.welfare_set.items))
+        self.assertEqual(len(entities), len(instrument.welfare_set.items))
         self.assertEqual(len(des), len(entities) * 2 * self.cfg.desirability_reps)
 
 

@@ -216,13 +216,11 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 
-# Generated experiment state/reports. Keep raw JSONL data (for example,
-# `results.jsonl` and `welfare.jsonl`); everything below can be reproduced.
+# Generated experiment state/reports. Keep raw JSONL data (`welfare.jsonl` and
+# `welfare_api.jsonl`); everything below can be reproduced.
 *.status.json
 results.log
 report_preliminary.html
-results/analysis/
-results/validity/
 results/welfare/
 results/welfare_analysis/
 results/welfare_analysis_forced/
