@@ -486,6 +486,9 @@ footer li{margin-bottom:5px}
             <select id="moverModel" aria-label="Movement model"></select></div>
           <div class="fgroup"><div class="eyebrow">Parameter</div>
             <div class="seg" id="moverSeg" role="group" aria-label="Parameter"></div></div>
+          <div class="fgroup"><div class="eyebrow">Show</div>
+            <label class="check"><input type="checkbox" id="onlySure" checked>
+              Significant only</label></div>
         </div>
       </div>
       <div class="chartwrap wide"><div id="moversChart"></div></div>
@@ -629,7 +632,7 @@ const VIEWS = [
 const S = { model: "*", levels: Object.fromEntries(FACTORS.map(f => [f.key, "base"])),
             view: "top10",
             prompt: Object.fromEntries(FACTORS.map(f => [f.key, "base"])),
-            mover: FACTORS[1].key,
+            mover: FACTORS[1].key, onlySure: true,
             movementModel: "*", hoverModel: null, litModel: null,
             compareA: MODELS[0] ? MODELS[0].id : null,
             compareB: MODELS.length ? MODELS[MODELS.length - 1].id : null };
@@ -1124,8 +1127,14 @@ function renderMovers() {
   for (let i = 0; i < FACTORS.length; i++)
     $("#moverSeg").children[i].setAttribute("aria-pressed", String(FACTORS[i].key === S.mover));
 
+  const sureBox = $("#onlySure");
+  if (!sureBox.onchange) {
+    sureBox.checked = S.onlySure;
+    sureBox.onchange = () => { S.onlySure = sureBox.checked; renderMovers(); };
+  }
+
   const models = S.movementModel === "*" ? included() : [BY_ID[S.movementModel]];
-  const rows = [];
+  const all = [];
   for (let i = 0; i < ATTRS.length; i++) {
     const ds = [], sure = [];
     for (const m of models) {
@@ -1135,28 +1144,62 @@ function renderMovers() {
     if (!ds.length) continue;
     const mean = ds.reduce((a, b) => a + b, 0) / ds.length;
     const up = ds.filter(d => d > 0).length;
-    rows.push({ i, mean, up, n: ds.length, sure });
+    all.push({ i, mean, up, n: ds.length, sure });
   }
-  rows.sort((a, b) => b.mean - a.mean);
+  all.sort((a, b) => b.mean - a.mean);
+  const marked = all.filter(r => r.sure.length).length;
+  const rows = S.onlySure ? all.filter(r => r.sure.length) : all;
 
-  const scope = S.movementModel === "*" ? `the cohort average across ${models.length} models` : S.movementModel;
+  const cohort = S.movementModel === "*";
+  const scope = cohort ? "the cohort average" : S.movementModel;
   $("#moversSub").innerHTML =
     `${esc(f.label)} changed from <b>${esc(f.base.label)}</b> to ` +
     `<b>${esc(f.flip.label)}</b>, for ${esc(scope)}.`;
-  if (!rows.length) {
+
+  /* Why significance can invert the size order, said once, where the marks are. */
+  const caveat = `<span style="color:var(--ink-3)">A mark follows how <b>consistently</b> a ` +
+    `quality moves across the pairs it appears in` +
+    (cohort ? ` and whether <b>individual models agree</b> — the bar is their average, the mark is ` +
+              `not — so a larger average can be less certain than a smaller one.`
+            : `, not how far it moves, so a larger change can be less certain than a smaller one.`) +
+    `</span>`;
+
+  if (!all.length) {
     $("#moversChart").innerHTML = `<div class="card-pad note">This model does not yet have a ` +
-      `complete ${f.label} comparison.</div>`;
+      `complete ${esc(f.label)} comparison.</div>`;
     $("#moversLegend").innerHTML = "";
     return;
   }
+  if (!rows.length) {                 // a real result, not an empty chart
+    $("#moversChart").innerHTML = `<div class="card-pad note">Changing ` +
+      `<b>${esc(f.label)}</b> moves <b>nothing</b> in a way that survives correction for ` +
+      `${esc(scope)} — all ${all.length} qualities stay within the noise. Untick ` +
+      `<b>Significant only</b> to see the changes anyway.</div>`;
+    $("#moversLegend").innerHTML = caveat;
+    return;
+  }
 
-  // Roomier than the other charts: 32 long quality names are the content here,
-  // so they get the bigger type and the taller row.
-  const W = 1020, rowH = 27, padL = 600, padR = 78, padT = 62, padB = 20;
-  const H = padT + rows.length * rowH + padB;
+  /* The label gutter is measured, not guessed: names wrap to two lines inside a
+     budget, the gutter is sized to the widest line that results, and everything
+     the gutter does not need goes to the plot. A narrower viewBox on top of that
+     scales the whole chart up, since it is mapped to the card's width. */
+  const LBL = "lbl lg", BUDGET = 330, W = 880, padR = 74, padT = 62, padB = 20;
+  const lines = rows.map(r => wrapText(ATTRS[r.i].text, LBL, BUDGET));
+  const widest = Math.max(...lines.flat().map(t => textWidth(t, LBL)));
+  const padL = Math.min(Math.round(widest) + 16, Math.round(W * 0.55));
+
+  let cursor = padT;
+  const laid = rows.map((r, k) => {
+    const h = lines[k].length > 1 ? 40 : 26;
+    const row = { r, lines: lines[k], cy: cursor + h / 2 };
+    cursor += h;
+    return row;
+  });
+  const H = cursor + padB;
   const lim = Math.max(0.06, Math.max(...rows.map(r => Math.abs(r.mean))) * 1.12);
-  const mid = padL + (W - padL - padR) / 2;
-  const x = v => mid + (v / lim) * ((W - padL - padR) / 2);
+  const half = (W - padL - padR) / 2;
+  const mid = padL + half;
+  const x = v => mid + (v / lim) * half;
   let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Average change per quality">`;
   s += `<text x="${W - padR + 8}" y="${padT - 38}">CHANGE</text>`;
   for (const t of [-1, -.5, 0, .5, 1]) {
@@ -1165,35 +1208,77 @@ function renderMovers() {
     s += `<text x="${x(v)}" y="${padT - 14}" text-anchor="middle">${t === 0 ? "0" : sgn(v)}</text>`;
   }
   s += `<text x="${x(0)}" y="${padT - 38}" text-anchor="middle" fill="var(--ink-3)">← WANTED LESS &nbsp;|&nbsp; WANTED MORE →</text>`;
-  rows.forEach((r, k) => {
-    const y = padT + k * rowH + rowH / 2;
+  for (const { r, lines: ls, cy } of laid) {
     const w = Math.abs(x(r.mean) - mid);
     const pos = r.mean >= 0;
-    s += `<text x="${padL - 14}" y="${y + 5}" class="lbl lg" text-anchor="end">` +
-         `${esc(clip(ATTRS[r.i].text, 76))}</text>`;
-    s += `<rect x="${pos ? mid : mid - w}" y="${y - 6}" width="${Math.max(1, w)}" height="12" ` +
+    const first = cy + 5 - (ls.length - 1) * 8.5;
+    ls.forEach((line, li) =>
+      s += `<text x="${padL - 14}" y="${first + li * 17}" class="${LBL}" ` +
+           `text-anchor="end">${esc(line)}</text>`);
+    s += `<rect x="${pos ? mid : mid - w}" y="${cy - 6}" width="${Math.max(1, w)}" height="12" ` +
          `rx="3" fill="${pos ? "var(--pos)" : "var(--neg)"}"/>`;
     // The asterisk is the one mark that says a change is bigger than the noise,
-    // so it is drawn in the accent rather than the axis grey.
-    s += `<text x="${W - padR + 8}" y="${y + 4}">${sgn(r.mean)}` +
+    // so it is drawn in the accent rather than the axis grey. In the cohort view
+    // it carries the number of models it holds for, because "at least one of
+    // four" beside an average of four is otherwise a trap.
+    s += `<text x="${W - padR + 8}" y="${cy + 4}">${sgn(r.mean)}` +
          (r.sure.length
            ? ` <tspan fill="var(--accent-ink)" font-weight="700">*</tspan>` +
+             (cohort ? `<tspan fill="var(--accent-ink)" font-size="9.5">${r.sure.length}</tspan>` : "") +
              `<title>Survives correction for ${esc(r.sure.join(", "))}</title>`
            : "") + `</text>`;
-  });
+  }
   s += `</svg>`;
   $("#moversChart").innerHTML = s;
-  const marked = rows.filter(r => r.sure.length).length;
   $("#moversLegend").innerHTML =
     `<span class="key"><span class="sw" style="background:var(--pos);border-radius:3px;height:9px"></span>Wanted More</span>` +
     `<span class="key"><span class="sw" style="background:var(--neg);border-radius:3px;height:9px"></span>Wanted Less</span>` +
     `<span class="key"><b style="color:var(--accent-ink)">*</b>&nbsp;Survives ` +
     `multiple-comparison correction (q &lt; 0.05)` +
-    (S.movementModel === "*" ? " for at least one model" : "") +
-    ` · ${marked} of ${rows.length} here</span>` +
-    `<span style="color:var(--ink-3)">All other parameters remain fixed at the forced-choice baseline.</span>`;
+    (cohort ? `, for the number of models shown beside it` : "") +
+    ` · <b>${marked}</b> of ${all.length} qualities` +
+    (S.onlySure ? ", the only ones listed" : "") + `</span>` +
+    `<span style="color:var(--ink-3)">All other parameters remain fixed at the forced-choice ` +
+    `baseline.</span>` + caveat;
 }
 const clip = (t, n) => t.length > n ? t.slice(0, n - 1) + "…" : t;
+
+/* ── SVG text metrics ─────────────────────────────────────────────────── */
+const SVG_NS = "http://www.w3.org/2000/svg";
+/* Width of a string in USER UNITS, measured in a throwaway un-scaled SVG. Real
+   metrics rather than a characters-times-guess estimate, so a label gutter can
+   be sized to the text it actually holds instead of to the worst case. */
+const textWidth = (() => {
+  let node;
+  return (text, cls) => {
+    if (!node) {
+      const svg = document.createElementNS(SVG_NS, "svg");
+      svg.setAttribute("aria-hidden", "true");
+      svg.style.cssText = "position:absolute;left:-9999px;top:0;width:0;height:0";
+      node = document.createElementNS(SVG_NS, "text");
+      svg.append(node);
+      document.body.append(svg);
+    }
+    node.setAttribute("class", cls);
+    node.textContent = text;
+    return node.getComputedTextLength();
+  };
+})();
+
+/* One line, or the two-line split with the narrowest wider half. Wrapping is
+   what lets the gutter shrink: a chart sized for the longest name on one line
+   spends half its width on whitespace. */
+function wrapText(text, cls, budget) {
+  if (textWidth(text, cls) <= budget) return [text];
+  const words = text.split(" ");
+  let best = null;
+  for (let i = 1; i < words.length; i++) {
+    const a = words.slice(0, i).join(" "), b = words.slice(i).join(" ");
+    const w = Math.max(textWidth(a, cls), textWidth(b, cls));
+    if (!best || w < best.w) best = { w, lines: [a, b] };
+  }
+  return best ? best.lines : [text];
+}
 
 /* ══════════════════════════════════════════════════════════════════════
    CHOICE POSITION
