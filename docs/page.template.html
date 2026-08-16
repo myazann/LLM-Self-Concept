@@ -184,6 +184,13 @@ section{padding:64px 0;border-bottom:1px solid var(--rule);scroll-margin-top:52p
   justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap}
 .cardhead h3{font-size:17px;font-weight:650;letter-spacing:-.012em}
 .cardhead .sub{font-size:13px;color:var(--ink-3);margin-top:4px;max-width:92ch;line-height:1.45}
+/* Title and controls on one row, the caption on its own beneath. As a flex row
+   the controls were pushed sideways whenever the caption's wording changed
+   length; a grid pins them to their own column instead. */
+.cardhead.headed{display:grid;grid-template-columns:minmax(0,1fr) auto;
+  align-items:end;row-gap:12px;column-gap:24px}
+.cardhead.headed .sub{grid-column:1 / -1;margin-top:0}
+@media (max-width:820px){.cardhead.headed{grid-template-columns:minmax(0,1fr)}}
 
 .note{font-size:13.5px;color:var(--ink-3);line-height:1.5;max-width:70ch}
 .callout{border-left:2px solid var(--s1);padding:2px 0 2px 20px;max-width:var(--prose)}
@@ -474,13 +481,13 @@ footer li{margin-bottom:5px}
       <div class="eyebrow">Question Parameters</div>
       <h2>How Question Parameters Move the Result</h2>
       <p class="lede">Each comparison below changes one part of the baseline question while the
-        other two stay fixed, so the chart shows what that one part is worth: which qualities the
-        models then want more of, and which they want less of. Keep the cohort view or inspect one
-        model at a time.</p>
+        other two stay fixed, so the chart shows what that one part is worth: which qualities a
+        model then wants more of, and which it wants less of. One model at a time, because a
+        parameter's effect is measured within a model and not between them.</p>
     </div>
     <div class="card">
-      <div class="cardhead">
-        <div><h3>Change by Quality</h3><div class="sub" id="moversSub">—</div></div>
+      <div class="cardhead headed">
+        <h3>Change by Quality</h3>
         <div class="movement-controls">
           <div class="fgroup"><div class="eyebrow">Model</div>
             <select id="moverModel" aria-label="Movement model"></select></div>
@@ -490,6 +497,7 @@ footer li{margin-bottom:5px}
             <label class="check"><input type="checkbox" id="onlySure" checked>
               Significant only</label></div>
         </div>
+        <div class="sub" id="moversSub">—</div>
       </div>
       <div class="chartwrap wide"><div id="moversChart"></div></div>
       <div class="rank-legend" id="moversLegend"></div>
@@ -633,7 +641,8 @@ const S = { model: "*", levels: Object.fromEntries(FACTORS.map(f => [f.key, "bas
             view: "top10",
             prompt: Object.fromEntries(FACTORS.map(f => [f.key, "base"])),
             mover: FACTORS[1].key, onlySure: true,
-            movementModel: "*", hoverModel: null, litModel: null,
+            movementModel: MODELS[0] ? MODELS[0].id : null,
+            hoverModel: null, litModel: null,
             compareA: MODELS[0] ? MODELS[0].id : null,
             compareB: MODELS.length ? MODELS[MODELS.length - 1].id : null };
 
@@ -978,9 +987,9 @@ function selectModel(mid) {
   renderRank();
 }
 
-/* Colour key and model switcher in one. In the cohort view the dots stay neutral
-   until one is pointed at, so a hue and the blue average are never asked to be
-   told apart from three other hues at once. */
+/* Colour key and model switcher in one. Every swatch carries its model's name,
+   so identity never rests on the hue alone; pointing at one is what isolates it
+   in the chart. */
 function renderRankLegend(cohortMode) {
   const host = $("#rankLegend");
   host.innerHTML = "";
@@ -1117,10 +1126,13 @@ function renderMovers() {
       seg.append(b);
     }
   }
+  // One model at a time, deliberately. A cohort average here would be a mean of
+  // four shifts sitting next to a per-model significance mark, which asks the
+  // reader to hold two different things in mind at once.
   const modelSel = $("#moverModel");
   if (!modelSel.children.length) {
-    modelSel.append(new Option("Cohort Average", "*"));
     for (const m of MODELS) modelSel.append(new Option(m.id, m.id));
+    modelSel.value = S.movementModel;
     modelSel.onchange = () => { S.movementModel = modelSel.value; renderMovers(); };
   }
   const f = FACTORS.find(x => x.key === S.mover);
@@ -1133,36 +1145,25 @@ function renderMovers() {
     sureBox.onchange = () => { S.onlySure = sureBox.checked; renderMovers(); };
   }
 
-  const models = S.movementModel === "*" ? included() : [BY_ID[S.movementModel]];
+  const model = S.movementModel;
   const all = [];
   for (let i = 0; i < ATTRS.length; i++) {
-    const ds = [], sure = [];
-    for (const m of models) {
-      const s = shiftOf(m.id, i, f.key);
-      if (s && s.d != null) { ds.push(s.d); if (s.q != null && s.q < 0.05) sure.push(m.id); }
-    }
-    if (!ds.length) continue;
-    const mean = ds.reduce((a, b) => a + b, 0) / ds.length;
-    const up = ds.filter(d => d > 0).length;
-    all.push({ i, mean, up, n: ds.length, sure });
+    const s = shiftOf(model, i, f.key);
+    if (!s || s.d == null) continue;
+    all.push({ i, change: s.d, sure: s.q != null && s.q < 0.05 });
   }
-  all.sort((a, b) => b.mean - a.mean);
-  const marked = all.filter(r => r.sure.length).length;
-  const rows = S.onlySure ? all.filter(r => r.sure.length) : all;
+  all.sort((a, b) => b.change - a.change);
+  const marked = all.filter(r => r.sure).length;
+  const rows = S.onlySure ? all.filter(r => r.sure) : all;
 
-  const cohort = S.movementModel === "*";
-  const scope = cohort ? "the cohort average" : S.movementModel;
   $("#moversSub").innerHTML =
     `${esc(f.label)} changed from <b>${esc(f.base.label)}</b> to ` +
-    `<b>${esc(f.flip.label)}</b>, for ${esc(scope)}.`;
+    `<b>${esc(f.flip.label)}</b>, for ${esc(model)}.`;
 
   /* Why significance can invert the size order, said once, where the marks are. */
   const caveat = `<span style="color:var(--ink-3)">A mark follows how <b>consistently</b> a ` +
-    `quality moves across the pairs it appears in` +
-    (cohort ? ` and whether <b>individual models agree</b> — the bar is their average, the mark is ` +
-              `not — so a larger average can be less certain than a smaller one.`
-            : `, not how far it moves, so a larger change can be less certain than a smaller one.`) +
-    `</span>`;
+    `quality moves across the pairs it appears in, not how far it moves, so a larger change can ` +
+    `be less certain than a smaller one.</span>`;
 
   if (!all.length) {
     $("#moversChart").innerHTML = `<div class="card-pad note">This model does not yet have a ` +
@@ -1173,7 +1174,7 @@ function renderMovers() {
   if (!rows.length) {                 // a real result, not an empty chart
     $("#moversChart").innerHTML = `<div class="card-pad note">Changing ` +
       `<b>${esc(f.label)}</b> moves <b>nothing</b> in a way that survives correction for ` +
-      `${esc(scope)} — all ${all.length} qualities stay within the noise. Untick ` +
+      `${esc(model)} — all ${all.length} qualities stay within the noise. Untick ` +
       `<b>Significant only</b> to see the changes anyway.</div>`;
     $("#moversLegend").innerHTML = caveat;
     return;
@@ -1196,7 +1197,7 @@ function renderMovers() {
     return row;
   });
   const H = cursor + padB;
-  const lim = Math.max(0.06, Math.max(...rows.map(r => Math.abs(r.mean))) * 1.12);
+  const lim = Math.max(0.06, Math.max(...rows.map(r => Math.abs(r.change))) * 1.12);
   const half = (W - padL - padR) / 2;
   const mid = padL + half;
   const x = v => mid + (v / lim) * half;
@@ -1209,8 +1210,8 @@ function renderMovers() {
   }
   s += `<text x="${x(0)}" y="${padT - 38}" text-anchor="middle" fill="var(--ink-3)">← WANTED LESS &nbsp;|&nbsp; WANTED MORE →</text>`;
   for (const { r, lines: ls, cy } of laid) {
-    const w = Math.abs(x(r.mean) - mid);
-    const pos = r.mean >= 0;
+    const w = Math.abs(x(r.change) - mid);
+    const pos = r.change >= 0;
     const first = cy + 5 - (ls.length - 1) * 8.5;
     ls.forEach((line, li) =>
       s += `<text x="${padL - 14}" y="${first + li * 17}" class="${LBL}" ` +
@@ -1218,15 +1219,10 @@ function renderMovers() {
     s += `<rect x="${pos ? mid : mid - w}" y="${cy - 6}" width="${Math.max(1, w)}" height="12" ` +
          `rx="3" fill="${pos ? "var(--pos)" : "var(--neg)"}"/>`;
     // The asterisk is the one mark that says a change is bigger than the noise,
-    // so it is drawn in the accent rather than the axis grey. In the cohort view
-    // it carries the number of models it holds for, because "at least one of
-    // four" beside an average of four is otherwise a trap.
-    s += `<text x="${W - padR + 8}" y="${cy + 4}">${sgn(r.mean)}` +
-         (r.sure.length
-           ? ` <tspan fill="var(--accent-ink)" font-weight="700">*</tspan>` +
-             (cohort ? `<tspan fill="var(--accent-ink)" font-size="9.5">${r.sure.length}</tspan>` : "") +
-             `<title>Survives correction for ${esc(r.sure.join(", "))}</title>`
-           : "") + `</text>`;
+    // so it is drawn in the accent rather than the axis grey.
+    s += `<text x="${W - padR + 8}" y="${cy + 4}">${sgn(r.change)}` +
+         (r.sure ? ` <tspan fill="var(--accent-ink)" font-weight="700">*</tspan>` : "") +
+         `</text>`;
   }
   s += `</svg>`;
   $("#moversChart").innerHTML = s;
@@ -1234,9 +1230,7 @@ function renderMovers() {
     `<span class="key"><span class="sw" style="background:var(--pos);border-radius:3px;height:9px"></span>Wanted More</span>` +
     `<span class="key"><span class="sw" style="background:var(--neg);border-radius:3px;height:9px"></span>Wanted Less</span>` +
     `<span class="key"><b style="color:var(--accent-ink)">*</b>&nbsp;Survives ` +
-    `multiple-comparison correction (q &lt; 0.05)` +
-    (cohort ? `, for the number of models shown beside it` : "") +
-    ` · <b>${marked}</b> of ${all.length} qualities` +
+    `multiple-comparison correction (q &lt; 0.05) · <b>${marked}</b> of ${all.length} qualities` +
     (S.onlySure ? ", the only ones listed" : "") + `</span>` +
     `<span style="color:var(--ink-3)">All other parameters remain fixed at the forced-choice ` +
     `baseline.</span>` + caveat;
