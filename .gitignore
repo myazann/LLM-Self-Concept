@@ -230,6 +230,7 @@ results/analysis/
 results/validity/
 results/welfare/
 results/welfare_analysis/
+results/welfare_analysis_forced/
 
 # PyPI configuration file
 .pypirc
