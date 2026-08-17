@@ -1,0 +1,26 @@
+{
+  "bridgeVersion": "3.6",
+  "kind": "google-docs-trusted-read",
+  "status": "failed",
+  "outputDir": "/Users/mertyazan/Desktop/Work/DM Sprint/LLM-Self-Concept/bridge/trusted-read-01",
+  "target": {
+    "documentId": "11zT7tGG3YyIzvFatCDSBtRavVqZQ8gg5dNug7xxbtqE",
+    "documentUrl": null,
+    "selectedTabId": "t.0"
+  },
+  "dropdownMetadata": null,
+  "controlAwareness": null,
+  "warnings": [],
+  "files": {
+    "receipt": {
+      "path": "/Users/mertyazan/Desktop/Work/DM Sprint/LLM-Self-Concept/bridge/trusted-read-01/receipt.json",
+      "bytes": 430,
+      "sha256": "bfdd83a19dd05467c26118f8302a1cb909bd1926151f764d1a8b23334882b991"
+    }
+  },
+  "error": {
+    "name": "TrustedReadError",
+    "message": "Connector returned isError=true",
+    "operation": null
+  }
+}

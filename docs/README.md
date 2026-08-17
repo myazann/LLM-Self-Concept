@@ -10,6 +10,29 @@ from a branch*, folder `/docs`) or open the file directly.
 | `index.html` | the generated page. Do not edit by hand; it is overwritten. |
 | `page.template.html` | markup, styles and the rendering code. Edit this. |
 | `build.py` | reads `results/welfare_analysis/`, injects the data, writes `index.html`. |
+| `generate_preference_figures.py` | reproduces the default cohort ranking as static top-10 and bottom-10 figures. |
+
+## Static preference figures
+
+The built page contains the exact data used by the interactive chart, so the
+static figures can be generated without a separate analysis-results directory:
+
+```bash
+python docs/generate_preference_figures.py
+```
+
+This writes `docs/figures/top_10_preferences.png` and
+`docs/figures/bottom_10_preferences.png` on a white background at 300 DPI. The
+wide label column uses 26-point black type, the legends use 25 points, and rank
+and top-axis labels use 23 points. Model and cohort balls are enlarged in both
+the plot and legend; only internal percentage dividers are drawn. The blue
+cohort marker is labeled “Average” on the left, while the four model entries
+form a 2 × 2 legend on the right. Colliding values are automatically dodged
+vertically within their row while retaining their exact horizontal score. The
+top chart omits the unused 0–25% segment and the bottom chart omits 75–100%.
+Right-side averages and the redundant range legend entry are not drawn. Run the
+script with `--help` to select the dark theme, PDF/SVG output, another
+destination, or different text and ball sizes.
 
 ## Rebuilding
 
