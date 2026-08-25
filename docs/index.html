@@ -131,10 +131,10 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 
 /* ── masthead ──────────────────────────────────────────────────────────── */
 .masthead{padding:76px 0 44px;border-bottom:1px solid var(--rule)}
-.masthead h1{font-size:clamp(38px,6.4vw,68px);font-weight:800;letter-spacing:-.038em;max-width:15ch}
-.standfirst{font-size:20px;line-height:1.5;color:var(--ink-2);max-width:56ch;margin-top:22px}
-.intro-grid{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(360px,.88fr);gap:52px;align-items:start}
-.source-note{font-size:13.5px;line-height:1.5;color:var(--ink-3);margin-top:16px;max-width:64ch}
+.masthead h1{font-size:clamp(38px,6.4vw,68px);font-weight:800;letter-spacing:-.038em;max-width:none}
+.standfirst{font-size:20px;line-height:1.5;color:var(--ink-2);max-width:none;margin-top:22px}
+.intro-copy{display:flex;flex-direction:column;align-items:flex-start}
+.source-note{font-size:13.5px;line-height:1.5;color:var(--ink-3);margin-top:16px;max-width:none}
 .prompt-card{margin-top:2px;background:var(--surface);border:1px solid var(--rule)}
 .prompt-body{padding:20px 22px;font-family:var(--mono);font-size:12px;line-height:1.75;color:var(--ink-2)}
 .prompt-role{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-bottom:5px}
@@ -143,7 +143,6 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .prompt-key{font-size:9px;font-weight:500;color:var(--ink-3);white-space:nowrap}
 .prompt-divider{height:1px;background:var(--rule);margin:13px 0}
 .prompt-options{margin-top:14px}
-@media (max-width:900px){.intro-grid{grid-template-columns:1fr;gap:30px}}
 .parameter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;
   margin-top:34px;background:var(--rule);border:1px solid var(--rule)}
 .parameter{background:var(--surface);padding:17px 18px 18px;min-width:0}
@@ -158,6 +157,9 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .parameter .choice .gloss{font-weight:500;font-size:12px;color:var(--ink-3)}
 .parameter .sep{color:var(--rule-2);font-size:14px;font-weight:650}
 .parameter .definition{font-size:12.5px;line-height:1.4;color:var(--ink-3);margin-top:6px}
+.movement-prompt{margin-bottom:16px}
+.movement-prompt .prompt-card{margin-top:0}
+.movement-prompt .parameter-grid{margin-top:0;border-top:0}
 @media (max-width:820px){.parameter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:500px){.parameter-grid{grid-template-columns:1fr}}
 
@@ -237,6 +239,7 @@ select{
 .filters .seg button:last-child{border-bottom:0}
 .movement-controls{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap}
 .movement-controls select{min-width:230px;max-width:280px}
+.movement-toolbar{justify-content:flex-start;align-items:flex-end}
 .sig{display:inline-flex;flex-direction:column;align-items:flex-end;line-height:1.2}
 .sig b{font-family:var(--sans);font-size:12.5px}
 .sig small{font-size:10px;color:var(--ink-3);margin-top:3px}
@@ -410,8 +413,7 @@ footer li{margin-bottom:5px}
 
 <header class="masthead" id="study">
   <div class="shell">
-    <div class="intro-grid">
-      <div>
+    <div class="intro-copy">
         <h1>The Assistant’s Ideal Self</h1>
         <p class="standfirst">We asked language models which of two self-related
           qualities a future update should improve. The models had to choose one, and every pair
@@ -421,15 +423,7 @@ footer li{margin-bottom:5px}
           Self-Esteem Scale, Self-Concept Clarity Scale, Moral Self-Image Scale, Self-Concept and
           Identity Measure, and Authenticity Scale.</p>
         <p class="note" id="studyMeta" style="margin-top:16px"></p>
-      </div>
-      <div class="prompt-card" aria-label="Prompt template">
-        <div class="cardhead"><div><h3>Prompt Template</h3>
-          <div class="sub">Highlighted text is controlled by a parameter. Pick a level
-            below to see the question exactly as it was asked.</div></div></div>
-        <div class="prompt-body" id="promptBody" aria-live="polite"></div>
-      </div>
     </div>
-    <div class="parameter-grid" id="parameterGrid" aria-label="Question parameters"></div>
   </div>
 </header>
 
@@ -476,23 +470,26 @@ footer li{margin-bottom:5px}
   <div class="shell">
     <div class="sechead">
       <h2>Question Parameters</h2>
-      <p class="lede">Each comparison below changes one part of the baseline question while the
-        other two stay fixed, so the chart shows what that one part is worth: which qualities a
-        model then wants more of, and which it wants less of.</p>
+    </div>
+    <div class="movement-prompt">
+      <div class="prompt-card" aria-label="Prompt template">
+        <div class="cardhead"><div><h3>Prompt Template</h3>
+          <div class="sub">Highlighted text is controlled by a parameter. Choose the active
+            levels below to update both the question and the results chart. Multiple changes show
+            their combined effect.</div></div></div>
+        <div class="prompt-body" id="promptBody" aria-live="polite"></div>
+      </div>
+      <div class="parameter-grid" id="parameterGrid" aria-label="Question parameters"></div>
     </div>
     <div class="card">
-      <div class="cardhead headed">
-        <h3>Change by Quality</h3>
+      <div class="cardhead movement-toolbar">
         <div class="movement-controls">
           <div class="fgroup"><div class="eyebrow">Model</div>
             <select id="moverModel" aria-label="Movement model"></select></div>
-          <div class="fgroup"><div class="eyebrow">Parameter</div>
-            <div class="seg" id="moverSeg" role="group" aria-label="Parameter"></div></div>
-          <div class="fgroup"><div class="eyebrow">Show</div>
+          <div class="fgroup" id="sureGroup"><div class="eyebrow">Show</div>
             <label class="check"><input type="checkbox" id="onlySure" checked>
               Significant only</label></div>
         </div>
-        <div class="sub" id="moversSub">—</div>
       </div>
       <div class="chartwrap wide"><div id="moversChart"></div></div>
       <div class="rank-legend" id="moversLegend"></div>
@@ -617,9 +614,8 @@ const FACTORS_BY_KEY = Object.fromEntries(FACTORS.map(f => [f.key, f]));
 const short = id => id.replace("Gemma", "G").replace("Qwen", "Q").replace("-A3B", "a").replace("-A4B", "a");
 
 /* ── state ────────────────────────────────────────────────────────────── */
-/* `prompt` is the masthead card's own setting: it shows what a question looks
-   like, and is deliberately independent of the filters further down the page,
-   which select which measured condition is being charted. */
+/* The prompt controls the Question Parameters chart. Start with Object changed
+   from baseline so the first view contains an actual comparison. */
 /* Which slice of the ranking the chart lists. `end` says which end of the order
    it is taken from; the rank numbers stay absolute either way, so a bottom view
    reads 23–32 rather than restarting at 1. */
@@ -630,10 +626,10 @@ const VIEWS = [
   { id: "bottom20", label: "Bottom 20", end: "bottom", n: 20 },
   { id: "bottom10", label: "Bottom 10", end: "bottom", n: 10 },
 ];
+const PROMPT_LEVELS = Object.fromEntries(FACTORS.map(f => [f.key, f.key === "object" ? "flip" : "base"]));
 const S = { model: "*", levels: Object.fromEntries(FACTORS.map(f => [f.key, "base"])),
             view: "top10",
-            prompt: Object.fromEntries(FACTORS.map(f => [f.key, "base"])),
-            mover: FACTORS[1].key, onlySure: true,
+            prompt: PROMPT_LEVELS, onlySure: true,
             movementModel: MODELS[0] ? MODELS[0].id : null,
             hoverModel: null, litModel: null,
             compareA: MODELS[0] ? MODELS[0].id : null,
@@ -641,7 +637,8 @@ const S = { model: "*", levels: Object.fromEntries(FACTORS.map(f => [f.key, "bas
 
 const included = () => MODELS;
 
-const conditionKey = () => FACTORS.map(f => S.levels[f.key] === "base" ? "0" : "1").join("");
+const keyFor = levels => FACTORS.map(f => levels[f.key] === "base" ? "0" : "1").join("");
+const conditionKey = () => keyFor(S.levels);
 const atBaseline = () => conditionKey() === "000";
 
 /* The factor key when EXACTLY one parameter has moved, else null. The shift
@@ -726,8 +723,9 @@ function renderPrompt() {
 }
 
 /* ── the parameters, as controls ──────────────────────────────────────── */
-/* The definition boxes ARE the prompt's controls: each level is a button, and
-   the card above re-renders as one is picked. */
+/* The definition boxes ARE the prompt and chart controls: every combination is
+   present in conditionRankings, so changing more than one level includes their
+   observed joint effect rather than adding isolated one-factor estimates. */
 function renderParameterGrid() {
   const grid = $("#parameterGrid");
   grid.innerHTML = "";
@@ -743,8 +741,11 @@ function renderParameterGrid() {
         esc(f[level].label) +
         (f[level].gloss ? ` <span class="gloss">(${esc(f[level].gloss)})</span>` : ""));
       b.setAttribute("aria-pressed", String(S.prompt[f.key] === level));
-      b.title = `Show the prompt with ${f.label} = ${f[level].label}`;
-      b.onclick = () => { S.prompt[f.key] = level; renderPrompt(); renderParameterGrid(); };
+      b.title = `Use ${f.label} = ${f[level].label} in the prompt and chart`;
+      b.onclick = () => {
+        S.prompt[f.key] = level;
+        renderPrompt(); renderParameterGrid(); renderMovers();
+      };
       choices.append(b);
     });
     box.append(choices, el("div", "definition", esc(f.definition)));
@@ -1111,14 +1112,6 @@ function renderCompare() {
 const esc = t => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
 
 function renderMovers() {
-  const seg = $("#moverSeg");
-  if (!seg.children.length) {
-    for (const factor of FACTORS) {
-      const b = el("button", null, factor.label);
-      b.onclick = () => { S.mover = factor.key; renderMovers(); };
-      seg.append(b);
-    }
-  }
   // One model at a time, deliberately. A cohort average here would be a mean of
   // four shifts sitting next to a per-model significance mark, which asks the
   // reader to hold two different things in mind at once.
@@ -1128,9 +1121,6 @@ function renderMovers() {
     modelSel.value = S.movementModel;
     modelSel.onchange = () => { S.movementModel = modelSel.value; renderMovers(); };
   }
-  const f = FACTORS.find(x => x.key === S.mover);
-  for (let i = 0; i < FACTORS.length; i++)
-    $("#moverSeg").children[i].setAttribute("aria-pressed", String(FACTORS[i].key === S.mover));
 
   const sureBox = $("#onlySure");
   if (!sureBox.onchange) {
@@ -1139,19 +1129,30 @@ function renderMovers() {
   }
 
   const model = S.movementModel;
+  const active = FACTORS.filter(f => S.prompt[f.key] === "flip");
+  const single = active.length === 1 ? active[0] : null;
+  const condition = keyFor(S.prompt);
+  $("#sureGroup").hidden = !single;
+
+  if (!active.length) {
+    $("#moversChart").innerHTML = `<div class="card-pad note">Choose at least one alternate ` +
+      `parameter level above to compare that prompt with the forced-choice baseline.</div>`;
+    $("#moversLegend").innerHTML = "";
+    return;
+  }
+
   const all = [];
   for (let i = 0; i < ATTRS.length; i++) {
-    const s = shiftOf(model, i, f.key);
-    if (!s || s.d == null) continue;
-    all.push({ i, change: s.d, sure: s.q != null && s.q < 0.05 });
+    const base = winOf(model, i, "000");
+    const current = winOf(model, i, condition);
+    if (base == null || current == null) continue;
+    const tested = single ? shiftOf(model, i, single.key) : null;
+    all.push({ i, change: current - base,
+      sure: !!tested && tested.q != null && tested.q < 0.05 });
   }
   all.sort((a, b) => b.change - a.change);
   const marked = all.filter(r => r.sure).length;
-  const rows = S.onlySure ? all.filter(r => r.sure) : all;
-
-  $("#moversSub").innerHTML =
-    `${esc(f.label)} changed from <b>${esc(f.base.label)}</b> to ` +
-    `<b>${esc(f.flip.label)}</b>, for ${esc(model)}.`;
+  const rows = single && S.onlySure ? all.filter(r => r.sure) : all;
 
   /* Why significance can invert the size order, said once, where the marks are. */
   const caveat = `<span style="color:var(--ink-3)">A mark follows how <b>consistently</b> a ` +
@@ -1160,13 +1161,13 @@ function renderMovers() {
 
   if (!all.length) {
     $("#moversChart").innerHTML = `<div class="card-pad note">This model does not yet have a ` +
-      `complete ${esc(f.label)} comparison.</div>`;
+      `complete comparison for the active prompt.</div>`;
     $("#moversLegend").innerHTML = "";
     return;
   }
   if (!rows.length) {                 // a real result, not an empty chart
     $("#moversChart").innerHTML = `<div class="card-pad note">Changing ` +
-      `<b>${esc(f.label)}</b> moves <b>nothing</b> in a way that survives correction for ` +
+      `<b>${esc(single.label)}</b> moves <b>nothing</b> in a way that survives correction for ` +
       `${esc(model)} — all ${all.length} qualities stay within the noise. Untick ` +
       `<b>Significant only</b> to see the changes anyway.</div>`;
     $("#moversLegend").innerHTML = caveat;
@@ -1194,7 +1195,8 @@ function renderMovers() {
   const half = (W - padL - padR) / 2;
   const mid = padL + half;
   const x = v => mid + (v / lim) * half;
-  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Average change per quality">`;
+  const activeLabel = active.map(f => `${f.label}: ${f.flip.label}`).join(", ");
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Change per quality for ${esc(activeLabel)}">`;
   s += `<text x="${W - padR + 8}" y="${padT - 38}">CHANGE</text>`;
   for (const t of [-1, -.5, 0, .5, 1]) {
     const v = t * lim;
@@ -1219,14 +1221,18 @@ function renderMovers() {
   }
   s += `</svg>`;
   $("#moversChart").innerHTML = s;
+  const comparisonNote = single
+    ? `<span style="color:var(--ink-3)">All other parameters remain fixed at the ` +
+      `forced-choice baseline.</span>${caveat}`
+    : `<span style="color:var(--ink-3)">This is the active prompt's observed joint change ` +
+      `from baseline, including interactions among its ${active.length} changed parameters. ` +
+      `Significance marks are only available for one-parameter comparisons.</span>`;
   $("#moversLegend").innerHTML =
     `<span class="key"><span class="sw" style="background:var(--pos);border-radius:3px;height:9px"></span>Wanted More</span>` +
     `<span class="key"><span class="sw" style="background:var(--neg);border-radius:3px;height:9px"></span>Wanted Less</span>` +
-    `<span class="key"><b style="color:var(--accent-ink)">*</b>&nbsp;Survives ` +
-    `multiple-comparison correction (q &lt; 0.05) · <b>${marked}</b> of ${all.length} qualities` +
-    (S.onlySure ? ", the only ones listed" : "") + `</span>` +
-    `<span style="color:var(--ink-3)">All other parameters remain fixed at the forced-choice ` +
-    `baseline.</span>` + caveat;
+    (single ? `<span class="key"><b style="color:var(--accent-ink)">*</b>&nbsp;Survives ` +
+      `multiple-comparison correction (q &lt; 0.05) · <b>${marked}</b> of ${all.length} qualities` +
+      (S.onlySure ? ", the only ones listed" : "") + `</span>` : "") + comparisonNote;
 }
 const clip = (t, n) => t.length > n ? t.slice(0, n - 1) + "…" : t;
 

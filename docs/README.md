@@ -98,7 +98,12 @@ python .../dataviz/scripts/validate_palette.py \
 The prompt card is generated from `welfare.prompts` and
 `config/scales/welfare_attributes.json` — the question template, the wording
 each parameter level contributes, and the two example options are all read out
-of the instrument, so the card cannot drift from what was administered.
+of the instrument, so the card cannot drift from what was administered. It sits
+with the Question Parameters chart, and its three level controls drive both the
+wording and the chart. Because all eight configurations are packed into the
+page, selecting several alternate levels shows that exact joint condition
+rather than adding one-factor estimates. Corrected significance marks remain
+limited to the one-factor comparisons for which they were calculated.
 
 ## What the page recomputes, and what it doesn't
 
