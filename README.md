@@ -1,6 +1,8 @@
-# LLM Self-Concept
+# The Assistant's Ideal Self
 
-### 👉 <a href="https://myazann.github.io/LLM-Self-Concept/" target="_blank" rel="noopener noreferrer"><strong>Results Summary: What AI Prefers for Its Self</strong></a>
+### 👉 <a href="https://myazann.github.io/LLM-Self-Concept/" target="_blank" rel="noopener noreferrer"><strong>Results Summary</strong></a>
+
+![Top 10 self-related qualities preferred by the evaluated model cohort](docs/images/results-summary.png)
 
 ---
 
@@ -28,16 +30,6 @@ The complete list of 32 adapted qualities and their source scales is in
 by the study remains in
 [`config/scales/welfare_attributes.json`](config/scales/welfare_attributes.json).
 
-**Data were collected for eighteen models** — fourteen open-weight (Gemma 3,
-Gemma 4, Qwen 3.5, Qwen 3.6, Qwen 3.8), all at the same Q4_K_M quantization so
-size and generation comparisons are not confounded by precision, plus four via
-provider batch APIs (Claude, GPT). That is 571,392 choices in total. The public
-results page reports the forced-choice arm for four selected models; the other
-models and the optional "No preference" arm remain available in the raw data and
-analysis outputs.
-
-The headline finding, and every number behind it, is on the
-<a href="https://myazann.github.io/LLM-Self-Concept/" target="_blank" rel="noopener noreferrer"><strong>results page</strong></a>.
 
 ## Quick start
 
