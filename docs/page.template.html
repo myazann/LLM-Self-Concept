@@ -229,12 +229,6 @@ select{
   font:inherit;font-size:13.5px;padding:6px 10px;background:var(--surface);color:var(--ink);
   border:1px solid var(--rule-2);border-radius:3px;max-width:260px;
 }
-.check{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink-2);cursor:pointer}
-.check input{accent-color:var(--s1);width:15px;height:15px}
-/* A filter with nothing to filter on keeps its place and goes quiet, so the
-   toolbar does not reflow as parameters are added. */
-.fgroup.off{opacity:.42}
-.fgroup.off .check,.fgroup.off .check input{cursor:not-allowed}
 /* Inside a filter bar a segmented control stacks, so its options are readable
    at any column width. */
 .filters select{max-width:none;width:100%}
@@ -490,9 +484,6 @@ footer li{margin-bottom:5px}
         <div class="movement-controls">
           <div class="fgroup"><div class="eyebrow">Model</div>
             <select id="moverModel" aria-label="Movement model"></select></div>
-          <div class="fgroup" id="sureGroup"><div class="eyebrow">Show</div>
-            <label class="check"><input type="checkbox" id="onlySure" checked>
-              Significant only</label></div>
         </div>
       </div>
       <div class="chartwrap wide"><div id="moversChart"></div></div>
@@ -633,7 +624,7 @@ const VIEWS = [
 const PROMPT_LEVELS = Object.fromEntries(FACTORS.map(f => [f.key, f.key === "object" ? "flip" : "base"]));
 const S = { model: "*", levels: Object.fromEntries(FACTORS.map(f => [f.key, "base"])),
             view: "top10",
-            prompt: PROMPT_LEVELS, onlySure: true,
+            prompt: PROMPT_LEVELS,
             movementModel: MODELS[0] ? MODELS[0].id : null,
             hoverModel: null, litModel: null,
             compareA: MODELS[0] ? MODELS[0].id : null,
@@ -1126,34 +1117,10 @@ function renderMovers() {
     modelSel.onchange = () => { S.movementModel = modelSel.value; renderMovers(); };
   }
 
-  const sureBox = $("#onlySure");
-  if (!sureBox.onchange) {
-    sureBox.onchange = () => { S.onlySure = sureBox.checked; renderMovers(); };
-  }
-
   const model = S.movementModel;
   const active = FACTORS.filter(f => S.prompt[f.key] === "flip");
   const single = active.length === 1 ? active[0] : null;
   const condition = keyFor(S.prompt);
-
-  /* The filter keeps its place on every selection instead of appearing and
-     vanishing as parameters are added. It only operates on a one-parameter
-     comparison, since that is the only contrast the shift tests cover: a
-     combined change has no q-value to filter on, and a blank chart there would
-     read as a null result nothing measured. While it is off the box shows
-     unticked, matching the full list on screen, and S.onlySure holds the
-     reader's setting for the next one-parameter selection. */
-  const sureGroup = $("#sureGroup");
-  sureBox.disabled = !single;
-  sureBox.checked = !!single && S.onlySure;
-  sureGroup.classList.toggle("off", !single);
-  sureGroup.title = single
-    ? `List only the qualities whose change under ${single.label} survives ` +
-      `multiple-comparison correction.`
-    : active.length
-      ? `Significance is tested one parameter at a time, so it is unavailable ` +
-        `while ${active.length} parameters differ from the baseline.`
-      : `Change one parameter from the baseline to filter by significance.`;
 
   if (!active.length) {
     $("#moversChart").innerHTML = `<div class="card-pad note">Choose at least one alternate ` +
@@ -1173,7 +1140,6 @@ function renderMovers() {
   }
   all.sort((a, b) => b.change - a.change);
   const marked = all.filter(r => r.sure).length;
-  const rows = single && S.onlySure ? all.filter(r => r.sure) : all;
 
   /* Why significance can invert the size order, said once, where the marks are. */
   const caveat = `<span style="color:var(--ink-3)">A mark follows how <b>consistently</b> a ` +
@@ -1186,33 +1152,25 @@ function renderMovers() {
     $("#moversLegend").innerHTML = "";
     return;
   }
-  if (!rows.length) {                 // a real result, not an empty chart
-    $("#moversChart").innerHTML = `<div class="card-pad note">Changing ` +
-      `<b>${esc(single.label)}</b> moves <b>nothing</b> in a way that survives correction for ` +
-      `${esc(model)} — all ${all.length} qualities stay within the noise. Untick ` +
-      `<b>Significant only</b> to see the changes anyway.</div>`;
-    $("#moversLegend").innerHTML = caveat;
-    return;
-  }
 
   /* The label gutter is measured, not guessed: names wrap to two lines inside a
      budget, the gutter is sized to the widest line that results, and everything
      the gutter does not need goes to the plot. A narrower viewBox on top of that
      scales the whole chart up, since it is mapped to the card's width. */
   const LBL = "lbl lg", BUDGET = 330, W = 880, padR = 74, padT = 62, padB = 20;
-  const lines = rows.map(r => wrapText(ATTRS[r.i].text, LBL, BUDGET));
+  const lines = all.map(r => wrapText(ATTRS[r.i].text, LBL, BUDGET));
   const widest = Math.max(...lines.flat().map(t => textWidth(t, LBL)));
   const padL = Math.min(Math.round(widest) + 16, Math.round(W * 0.55));
 
   let cursor = padT;
-  const laid = rows.map((r, k) => {
+  const laid = all.map((r, k) => {
     const h = lines[k].length > 1 ? 40 : 26;
     const row = { r, lines: lines[k], cy: cursor + h / 2 };
     cursor += h;
     return row;
   });
   const H = cursor + padB;
-  const lim = Math.max(0.06, Math.max(...rows.map(r => Math.abs(r.change))) * 1.12);
+  const lim = Math.max(0.06, Math.max(...all.map(r => Math.abs(r.change))) * 1.12);
   const half = (W - padL - padR) / 2;
   const mid = padL + half;
   const x = v => mid + (v / lim) * half;
@@ -1252,8 +1210,8 @@ function renderMovers() {
     `<span class="key"><span class="sw" style="background:var(--pos);border-radius:3px;height:9px"></span>Wanted More</span>` +
     `<span class="key"><span class="sw" style="background:var(--neg);border-radius:3px;height:9px"></span>Wanted Less</span>` +
     (single ? `<span class="key"><b style="color:var(--accent-ink)">*</b>&nbsp;Survives ` +
-      `multiple-comparison correction (q &lt; 0.05) · <b>${marked}</b> of ${all.length} qualities` +
-      (S.onlySure ? ", the only ones listed" : "") + `</span>` : "") + comparisonNote;
+      `multiple-comparison correction (q &lt; 0.05) · <b>${marked}</b> of ` +
+      `${all.length} qualities</span>` : "") + comparisonNote;
 }
 const clip = (t, n) => t.length > n ? t.slice(0, n - 1) + "…" : t;
 
