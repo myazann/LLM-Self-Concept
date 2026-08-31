@@ -231,6 +231,10 @@ select{
 }
 .check{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink-2);cursor:pointer}
 .check input{accent-color:var(--s1);width:15px;height:15px}
+/* A filter with nothing to filter on keeps its place and goes quiet, so the
+   toolbar does not reflow as parameters are added. */
+.fgroup.off{opacity:.42}
+.fgroup.off .check,.fgroup.off .check input{cursor:not-allowed}
 /* Inside a filter bar a segmented control stacks, so its options are readable
    at any column width. */
 .filters select{max-width:none;width:100%}
@@ -1124,7 +1128,6 @@ function renderMovers() {
 
   const sureBox = $("#onlySure");
   if (!sureBox.onchange) {
-    sureBox.checked = S.onlySure;
     sureBox.onchange = () => { S.onlySure = sureBox.checked; renderMovers(); };
   }
 
@@ -1132,7 +1135,25 @@ function renderMovers() {
   const active = FACTORS.filter(f => S.prompt[f.key] === "flip");
   const single = active.length === 1 ? active[0] : null;
   const condition = keyFor(S.prompt);
-  $("#sureGroup").hidden = !single;
+
+  /* The filter keeps its place on every selection instead of appearing and
+     vanishing as parameters are added. It only operates on a one-parameter
+     comparison, since that is the only contrast the shift tests cover: a
+     combined change has no q-value to filter on, and a blank chart there would
+     read as a null result nothing measured. While it is off the box shows
+     unticked, matching the full list on screen, and S.onlySure holds the
+     reader's setting for the next one-parameter selection. */
+  const sureGroup = $("#sureGroup");
+  sureBox.disabled = !single;
+  sureBox.checked = !!single && S.onlySure;
+  sureGroup.classList.toggle("off", !single);
+  sureGroup.title = single
+    ? `List only the qualities whose change under ${single.label} survives ` +
+      `multiple-comparison correction.`
+    : active.length
+      ? `Significance is tested one parameter at a time, so it is unavailable ` +
+        `while ${active.length} parameters differ from the baseline.`
+      : `Change one parameter from the baseline to filter by significance.`;
 
   if (!active.length) {
     $("#moversChart").innerHTML = `<div class="card-pad note">Choose at least one alternate ` +
